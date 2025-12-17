@@ -19,7 +19,11 @@
       "@/*": ["./src/*"]
     }
   },
-  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
+  "include": [
+    "next-env.d.ts",
+    "**/*.ts",
+    "**/*.tsx",
+    ".next/types/**/*.ts"
+  ],
   "exclude": ["node_modules"]
 }
-, "src/app/admin/empreendimentos/empreendimentoGeocode.tsx", "src/app/admin/empreendimentos/[id]/midias/midiasClient.tsx"
