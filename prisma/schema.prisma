@@ -1,0 +1,209 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum TenantType {
+  IMOBILIARIA
+  CORRETOR_AUTONOMO
+}
+
+enum UserRole {
+  OWNER
+  ADMIN
+  BROKER
+  MANAGER
+}
+
+enum EmpreendimentoTipo {
+  CONDOMINIO_VERTICAL
+  CONDOMINIO_CASAS
+  CONDOMINIO_LOTES
+  LOTEAMENTO
+  APARTAMENTO
+  CASA
+  LOTE
+  COMERCIAL
+  GALPAO
+  AREA
+  FAZENDA
+  OUTRO
+}
+
+enum FinancingModel {
+  CREDITO_ASSOCIATIVO
+  FLUXO_ATE_CHAVES
+}
+
+model Tenant {
+  id        String     @id @default(cuid())
+  name      String
+  type      TenantType @default(IMOBILIARIA)
+  slug      String     @unique
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  users           User[]
+  construtoras    Construtora[]
+  empreendimentos Empreendimento[]
+}
+
+model User {
+  id        String   @id @default(cuid())
+  tenantId  String
+  name      String
+  email     String   @unique
+  role      UserRole @default(OWNER)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+}
+
+model Construtora {
+  id        String   @id @default(cuid())
+  tenantId  String
+
+  name      String
+  website   String?
+  logoUrl   String?
+
+  // opcionais (não engessar)
+  cnpj      String?
+  telefone  String?
+  email     String?
+  endereco  String?
+  responsavelComercial String?
+  whatsappComercial    String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+  empreendimentos Empreendimento[]
+
+  @@index([tenantId])
+  @@unique([tenantId, name])
+}
+
+model Empreendimento {
+  id            String   @id @default(cuid())
+  tenantId      String
+  construtoraId String?
+
+  name          String
+  slug          String
+  tipo          EmpreendimentoTipo @default(OUTRO)
+
+  // endereço (pode nascer só com endereco “livre”)
+  endereco      String?
+  bairro        String?
+  cidade        String?
+  uf            String?
+  cep           String?
+
+  // mapa
+  lat           Float?
+  lng           Float?
+
+  // conteúdo
+  descricao     String?
+  dataLancamento DateTime?
+  dataEntrega    DateTime?
+
+  // comercial (do empreendimento)
+  contatoNome    String?
+  contatoTelefone String?
+  contatoWhatsapp String?
+
+  publicado     Boolean @default(false)
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  tenant      Tenant       @relation(fields: [tenantId], references: [id])
+  construtora Construtora? @relation(fields: [construtoraId], references: [id])
+
+  fotos      EmpreendimentoFoto[]
+  anexos     EmpreendimentoAnexo[]
+  tipologias EmpreendimentoTipologia[]
+
+  @@unique([tenantId, slug])
+  @@index([tenantId])
+  @@index([lat, lng])
+}
+
+model EmpreendimentoFoto {
+  id               String   @id @default(cuid())
+  empreendimentoId String
+  urlFull          String
+  urlThumb         String
+  ordem            Int      @default(0)
+  isCover          Boolean  @default(false)
+  createdAt        DateTime @default(now())
+
+  empreendimento   Empreendimento @relation(fields: [empreendimentoId], references: [id])
+
+  @@index([empreendimentoId])
+}
+
+
+model EmpreendimentoAnexo {
+  id               String   @id @default(cuid())
+  empreendimentoId String
+
+  // ex: "tabela_preco", "catalogo", "memorial", "plantas", "tour", etc.
+  tipo             String
+  titulo           String?
+  url              String
+  ordem            Int      @default(0)
+
+  createdAt        DateTime @default(now())
+
+  empreendimento Empreendimento @relation(fields: [empreendimentoId], references: [id])
+
+  @@index([empreendimentoId])
+}
+
+model EmpreendimentoTipologia {
+  id               String   @id @default(cuid())
+  empreendimentoId String
+
+  nome             String?
+  descricao        String?
+
+  areaPrivativa    Float?
+  areaTerreno      Float?
+
+  hectares         Float?
+  alqueires        Float?
+  valorCondominio  Int?
+
+  quartos          Int?
+  suites           Int?
+  vagas            Int?
+
+  totalUnidades    Int?
+  disponiveis      Int?
+
+  precoInicial     Int?
+  precoPorM2       Int?
+  atualizadoEm     DateTime?
+
+  financingModel   FinancingModel?
+
+  percentualAteChaves  Int?
+  valorAvaliacaoBanco  Int?
+  entradaMinima        Int?
+
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  empreendimento   Empreendimento @relation(fields: [empreendimentoId], references: [id])
+
+  @@index([empreendimentoId])
+}
