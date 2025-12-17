@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { prisma } from "../../../../../../../lib/prisma";
-import EmpreendimentoWizardNav from "../../../../../../../components/Empreendimentos/EmpreendimentoWizardNav";
+import EmpreendimentoWizardNav from "../../../../../../../components/empreendimentos/EmpreendimentoWizardNav";
 
 function toDateInput(d: Date | null) {
   return d ? d.toISOString().slice(0, 10) : "";

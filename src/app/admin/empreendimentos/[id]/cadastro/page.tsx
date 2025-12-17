@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { prisma } from "../../../../../lib/prisma";
-import EmpreendimentoWizardNav from "../../../../../components/Empreendimentos/EmpreendimentoWizardNav";
+import EmpreendimentoWizardNav from "../../../../../components/empreendimentos/EmpreendimentoWizardNav";
 
 export default async function CadastroEmpreendimentoHubPage({
   params,

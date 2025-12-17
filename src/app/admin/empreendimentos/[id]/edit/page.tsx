@@ -2,7 +2,7 @@ import EmpreendimentoGeocode from "../../empreendimentoGeocode";
 
 import Link from "next/link";
 import { prisma } from "../../../../../lib/prisma";
-import EmpreendimentoWizardNav from "../../../../../components/Empreendimentos/EmpreendimentoWizardNav";
+import EmpreendimentoWizardNav from "../../../../../components/empreendimentos/EmpreendimentoWizardNav";
 
 export default async function EditEmpreendimentoPage(
   { params }: { params: { id: string } | Promise<{ id: string }> }
