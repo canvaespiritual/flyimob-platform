@@ -38,6 +38,10 @@ enum FinancingModel {
   CREDITO_ASSOCIATIVO
   FLUXO_ATE_CHAVES
 }
+enum EmpreendimentoStatus {
+  ATIVO
+  INATIVO
+}
 
 model Tenant {
   id        String     @id @default(cuid())
@@ -99,28 +103,25 @@ model Empreendimento {
   slug          String
   tipo          EmpreendimentoTipo @default(OUTRO)
 
-  // endereço (pode nascer só com endereco “livre”)
+  status        EmpreendimentoStatus @default(INATIVO)
+  publicado     Boolean @default(false)
+
   endereco      String?
   bairro        String?
   cidade        String?
   uf            String?
   cep           String?
 
-  // mapa
   lat           Float?
   lng           Float?
 
-  // conteúdo
   descricao     String?
   dataLancamento DateTime?
   dataEntrega    DateTime?
 
-  // comercial (do empreendimento)
-  contatoNome    String?
+  contatoNome     String?
   contatoTelefone String?
   contatoWhatsapp String?
-
-  publicado     Boolean @default(false)
 
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
@@ -136,6 +137,7 @@ model Empreendimento {
   @@index([tenantId])
   @@index([lat, lng])
 }
+
 
 model EmpreendimentoFoto {
   id               String   @id @default(cuid())

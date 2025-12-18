@@ -39,6 +39,8 @@ const cep = form.get("cep") ? String(form.get("cep")) : null;
   
 
   const publicado = form.get("publicado") === "on";
+  const status = publicado ? "ATIVO" : "INATIVO";
+
 
   if (!name || !endereco) {
     return new Response("Campos obrigatórios: name e endereco.", { status: 400 });
@@ -65,6 +67,8 @@ const cep = form.get("cep") ? String(form.get("cep")) : null;
      cep,
 
       publicado,
+      status,
+      
     },
   });
 
