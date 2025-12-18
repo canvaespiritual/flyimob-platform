@@ -68,5 +68,12 @@ const cep = form.get("cep") ? String(form.get("cep")) : null;
     },
   });
 
-  return Response.redirect(new URL("/admin/empreendimentos", req.url), 303);
+  const proto = req.headers.get("x-forwarded-proto") ?? "http";
+const host = req.headers.get("x-forwarded-host") ?? req.headers.get("host");
+const origin = host ? `${proto}://${host}` : new URL(req.url).origin;
+return Response.redirect(
+  new URL(`/admin/empreendimentos/${id}/cadastro`, origin),
+  303
+);
+
 }

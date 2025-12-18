@@ -1,4 +1,3 @@
-import { headers } from "next/headers";
 import { prisma } from "../../../../lib/prisma";
 
 function toInt(v: FormDataEntryValue | null) {
@@ -106,10 +105,9 @@ export async function POST(req: Request) {
     },
   });
 
-  const h = headers();
-  const proto = h.get("x-forwarded-proto") ?? "https";
-  const host = h.get("x-forwarded-host") ?? h.get("host");
-  const origin = host ? `${proto}://${host}` : new URL(req.url).origin;
+  const proto = req.headers.get("x-forwarded-proto") ?? "http";
+const host = req.headers.get("x-forwarded-host") ?? req.headers.get("host");
+const origin = host ? `${proto}://${host}` : new URL(req.url).origin;
 
   return Response.redirect(
     new URL(`/admin/empreendimentos/${emp.id}/tipologias`, origin),
