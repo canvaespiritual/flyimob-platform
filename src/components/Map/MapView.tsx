@@ -1,7 +1,12 @@
 "use client";
 
-import { useCallback, useState } from "react";
-import { GoogleMap, Marker, InfoWindow, useJsApiLoader } from "@react-google-maps/api";
+import { useCallback, useRef, useState } from "react";
+import {
+  GoogleMap,
+  Marker,
+  InfoWindow,
+  useJsApiLoader,
+} from "@react-google-maps/api";
 import type { Empreendimento } from "@/lib/mockEmpreendimentos";
 
 type BoundsLite = {
@@ -29,23 +34,30 @@ export default function MapView({
 
   const [hovered, setHovered] = useState<Empreendimento | null>(null);
 
-  const handleIdle = useCallback(
-    (map: google.maps.Map) => {
-      const b = map.getBounds();
-      if (!b) return;
+  // Guarda a instância do mapa quando ele carregar (para usar depois no onIdle)
+  const mapRef = useRef<google.maps.Map | null>(null);
 
-      const sw = b.getSouthWest();
-      const ne = b.getNorthEast();
+  const handleLoad = useCallback((map: google.maps.Map) => {
+    mapRef.current = map;
+  }, []);
 
-      onBoundsChange({
-        swLat: sw.lat(),
-        swLng: sw.lng(),
-        neLat: ne.lat(),
-        neLng: ne.lng(),
-      });
-    },
-    [onBoundsChange]
-  );
+  const handleIdle = useCallback(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    const b = map.getBounds();
+    if (!b) return;
+
+    const sw = b.getSouthWest();
+    const ne = b.getNorthEast();
+
+    onBoundsChange({
+      swLat: sw.lat(),
+      swLng: sw.lng(),
+      neLat: ne.lat(),
+      neLng: ne.lng(),
+    });
+  }, [onBoundsChange]);
 
   if (!isLoaded) return <div className="p-4">Carregando mapa...</div>;
 
@@ -54,6 +66,7 @@ export default function MapView({
       mapContainerStyle={{ width: "100%", height: "100%" }}
       center={center}
       zoom={13}
+      onLoad={handleLoad}
       onIdle={handleIdle}
       options={{
         clickableIcons: false,
