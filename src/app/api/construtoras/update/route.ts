@@ -1,3 +1,4 @@
+import { headers } from "next/headers";
 import { prisma } from "../../../../lib/prisma";
 
 function txt(form: FormData, key: string) {
@@ -45,5 +46,14 @@ export async function POST(req: Request) {
     },
   });
 
-  return Response.redirect(new URL(`/admin/construtoras/${id}/edit`, req.url), 303);
+    const h = headers();
+  const proto = h.get("x-forwarded-proto") ?? "https";
+  const host = h.get("x-forwarded-host") ?? h.get("host");
+  const origin = host ? `${proto}://${host}` : new URL(req.url).origin;
+
+  return Response.redirect(
+    new URL(`/admin/construtoras/${id}/edit`, origin),
+    303
+  );
+
 }

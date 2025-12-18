@@ -1,3 +1,4 @@
+import { headers } from "next/headers";
 import { prisma } from "../../../../lib/prisma";
 
 export async function POST(req: Request) {
@@ -27,5 +28,14 @@ export async function POST(req: Request) {
 
   await prisma.construtora.delete({ where: { id } });
 
-  return Response.redirect(new URL("/admin/construtoras", req.url), 303);
+   const h = headers();
+  const proto = h.get("x-forwarded-proto") ?? "https";
+  const host = h.get("x-forwarded-host") ?? h.get("host");
+  const origin = host ? `${proto}://${host}` : new URL(req.url).origin;
+
+  return Response.redirect(
+    new URL("/admin/construtoras", origin),
+    303
+  );
+
 }
