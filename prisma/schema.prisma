@@ -38,6 +38,7 @@ enum FinancingModel {
   CREDITO_ASSOCIATIVO
   FLUXO_ATE_CHAVES
 }
+
 enum EmpreendimentoStatus {
   ATIVO
   INATIVO
@@ -54,6 +55,8 @@ model Tenant {
   users           User[]
   construtoras    Construtora[]
   empreendimentos Empreendimento[]
+  comparativos    Comparativo[]   // 👈 NOVO
+
 }
 
 model User {
@@ -76,7 +79,6 @@ model Construtora {
   website   String?
   logoUrl   String?
 
-  // opcionais (não engessar)
   cnpj      String?
   telefone  String?
   email     String?
@@ -87,7 +89,7 @@ model Construtora {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  tenant Tenant @relation(fields: [tenantId], references: [id])
+  tenant          Tenant          @relation(fields: [tenantId], references: [id])
   empreendimentos Empreendimento[]
 
   @@index([tenantId])
@@ -115,7 +117,7 @@ model Empreendimento {
   lat           Float?
   lng           Float?
 
-  descricao     String?
+  descricao      String?
   dataLancamento DateTime?
   dataEntrega    DateTime?
 
@@ -138,7 +140,6 @@ model Empreendimento {
   @@index([lat, lng])
 }
 
-
 model EmpreendimentoFoto {
   id               String   @id @default(cuid())
   empreendimentoId String
@@ -148,23 +149,21 @@ model EmpreendimentoFoto {
   isCover          Boolean  @default(false)
   createdAt        DateTime @default(now())
 
-  empreendimento   Empreendimento @relation(fields: [empreendimentoId], references: [id])
+  empreendimento Empreendimento @relation(fields: [empreendimentoId], references: [id])
 
   @@index([empreendimentoId])
 }
-
 
 model EmpreendimentoAnexo {
   id               String   @id @default(cuid())
   empreendimentoId String
 
-  // ex: "tabela_preco", "catalogo", "memorial", "plantas", "tour", etc.
-  tipo             String
-  titulo           String?
-  url              String
-  ordem            Int      @default(0)
+  tipo   String
+  titulo String?
+  url    String
+  ordem  Int @default(0)
 
-  createdAt        DateTime @default(now())
+  createdAt DateTime @default(now())
 
   empreendimento Empreendimento @relation(fields: [empreendimentoId], references: [id])
 
@@ -175,37 +174,123 @@ model EmpreendimentoTipologia {
   id               String   @id @default(cuid())
   empreendimentoId String
 
-  nome             String?
-  descricao        String?
+  nome        String?
+  descricao   String?
 
-  areaPrivativa    Float?
-  areaTerreno      Float?
+  areaPrivativa Float?
+  areaTerreno   Float?
 
-  hectares         Float?
-  alqueires        Float?
-  valorCondominio  Int?
+  hectares   Float?
+  alqueires  Float?
+  valorCondominio Int?
 
-  quartos          Int?
-  suites           Int?
-  vagas            Int?
+  quartos    Int?
+  suites     Int?
+  vagas      Int?
 
-  totalUnidades    Int?
-  disponiveis      Int?
+  totalUnidades Int?
+  disponiveis   Int?
 
-  precoInicial     Int?
-  precoPorM2       Int?
-  atualizadoEm     DateTime?
+  precoInicial Int?
+  precoPorM2   Int?
+  atualizadoEm DateTime?
 
-  financingModel   FinancingModel?
+  financingModel FinancingModel?
 
-  percentualAteChaves  Int?
-  valorAvaliacaoBanco  Int?
-  entradaMinima        Int?
+  percentualAteChaves Int?
+  valorAvaliacaoBanco Int?
+  entradaMinima       Int?
 
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  empreendimento   Empreendimento @relation(fields: [empreendimentoId], references: [id])
+  empreendimento Empreendimento @relation(fields: [empreendimentoId], references: [id])
+
+  comparativoItems ComparativoItem[]   // 👈 NOVO
 
   @@index([empreendimentoId])
 }
+
+/////////////////////////////////////////////////////////
+// 🔽🔽🔽  MÓDULO COMPARATIVOS  🔽🔽🔽
+/////////////////////////////////////////////////////////
+
+model Comparativo {
+  id          String   @id @default(cuid())
+  tenantId    String
+
+  titulo      String
+  clienteNome String
+  slugPublico String @unique
+
+  // Controle de exibição por BLOCO
+  showGeral        Boolean @default(true)
+  showEntrada      Boolean @default(true)
+  showFinanciamento Boolean @default(true)
+
+  configExibicao Json?  
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+  items  ComparativoItem[]
+
+  @@index([tenantId])
+}
+
+model ComparativoItem {
+  id            String @id @default(cuid())
+  comparativoId String
+  tipologiaId   String
+  ordem         Int
+
+  // =========================
+  // VALORES PRINCIPAIS
+  // =========================
+  valorTotal           Float?
+  entradaTotal         Float?
+  sinalEntrada         Float?
+  parcelaEntrada       Float?
+  parcelasEntradaQtd   Int?
+
+  // =========================
+  // PARCELAS FLEXÍVEIS (texto)
+  // =========================
+  parcelasIntermediarias String?
+  parcelasAnuais         String?
+  parcelaUnica           String?
+  parcelaEspecial        String?
+
+  // =========================
+  // FINANCIAMENTO
+  // =========================
+  saldoFinanciamento     Float?
+  parcelaFinanciamento   Float?
+  taxaJuros              Float?
+  rendaBrutaFamiliar     Float?
+
+  // =========================
+  // BENEFÍCIOS
+  // =========================
+  fgts                   Float?
+  subsidioFederal         Float?
+  subsidioEstadual        Float?
+  subsidioMunicipal      Float?
+
+  // =========================
+  // CUSTOS / OBS
+  // =========================
+  estimativaDocumentacao Float?
+  observacao             String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  comparativo Comparativo @relation(fields: [comparativoId], references: [id], onDelete: Cascade)
+  tipologia   EmpreendimentoTipologia @relation(fields: [tipologiaId], references: [id])
+
+  @@index([comparativoId])
+  @@index([tipologiaId])
+}
+
