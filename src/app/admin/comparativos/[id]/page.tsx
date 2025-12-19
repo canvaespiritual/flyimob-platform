@@ -540,16 +540,62 @@ export default function ComparativoEditorPage() {
                         <section>
                           <h3 className="font-medium mb-2">Entrada / Condições</h3>
                           <Grid>
-                            <MoneyInput label="Valor total" value={it.valorTotal} placeholder={money(t?.precoInicial)} onChange={(v) => setItemField(it.id, "valorTotal", v)} />
-                            <MoneyInput label="Entrada total" value={it.entradaTotal} onChange={(v) => setItemField(it.id, "entradaTotal", v)} />
-                            <MoneyInput label="Sinal" value={it.sinalEntrada} onChange={(v) => setItemField(it.id, "sinalEntrada", v)} />
-                            <MoneyInput label="Parcela entrada" value={it.parcelaEntrada} onChange={(v) => setItemField(it.id, "parcelaEntrada", v)} />
-                            <NumberInput label="Qtd parcelas entrada" value={it.parcelasEntradaQtd} onChange={(v) => setItemField(it.id, "parcelasEntradaQtd", v)} />
-                            <TextInput label="Parcelas intermediárias" value={it.parcelasIntermediarias} onChange={(v) => setItemField(it.id, "parcelasIntermediarias", v)} />
-                            <TextInput label="Parcelas anuais" value={it.parcelasAnuais} onChange={(v) => setItemField(it.id, "parcelasAnuais", v)} />
-                            <TextInput label="Parcela única" value={it.parcelaUnica} onChange={(v) => setItemField(it.id, "parcelaUnica", v)} />
-                            <TextInput label="Parcela especial" value={it.parcelaEspecial} onChange={(v) => setItemField(it.id, "parcelaEspecial", v)} />
-                          </Grid>
+  <MoneyInput
+    label="Valor total"
+    value={it.valorTotal}
+    placeholder={money(t?.precoInicial)}
+    onChange={(v: number | null) => setItemField(it.id, "valorTotal", v)}
+  />
+
+  <MoneyInput
+    label="Entrada total"
+    value={it.entradaTotal}
+    onChange={(v: number | null) => setItemField(it.id, "entradaTotal", v)}
+  />
+
+  <MoneyInput
+    label="Sinal"
+    value={it.sinalEntrada}
+    onChange={(v: number | null) => setItemField(it.id, "sinalEntrada", v)}
+  />
+
+  <MoneyInput
+    label="Parcela entrada"
+    value={it.parcelaEntrada}
+    onChange={(v: number | null) => setItemField(it.id, "parcelaEntrada", v)}
+  />
+
+  <NumberInput
+    label="Qtd parcelas entrada"
+    value={it.parcelasEntradaQtd}
+    onChange={(v: number | null) => setItemField(it.id, "parcelasEntradaQtd", v)}
+  />
+
+  <TextInput
+    label="Parcelas intermediárias"
+    value={it.parcelasIntermediarias}
+    onChange={(v: string) => setItemField(it.id, "parcelasIntermediarias", v)}
+  />
+
+  <TextInput
+    label="Parcelas anuais"
+    value={it.parcelasAnuais}
+    onChange={(v: string) => setItemField(it.id, "parcelasAnuais", v)}
+  />
+
+  <TextInput
+    label="Parcela única"
+    value={it.parcelaUnica}
+    onChange={(v: string) => setItemField(it.id, "parcelaUnica", v)}
+  />
+
+  <TextInput
+    label="Parcela especial"
+    value={it.parcelaEspecial}
+    onChange={(v: string) => setItemField(it.id, "parcelaEspecial", v)}
+  />
+</Grid>
+
                         </section>
                       )}
 
@@ -557,21 +603,87 @@ export default function ComparativoEditorPage() {
                         <section>
                           <h3 className="font-medium mb-2">Financiamento / Obs</h3>
                           <Grid>
-                            <MoneyInput
-                              label="Saldo financiamento"
-                              value={it.saldoFinanciamento ?? saldoSug}
-                              onChange={(v) => setItemField(it.id, "saldoFinanciamento", v)}
-                            />
-                            <MoneyInput label="Parcela financiamento" value={it.parcelaFinanciamento} onChange={(v) => setItemField(it.id, "parcelaFinanciamento", v)} />
-                            <MoneyInput label="FGTS" value={it.fgts} onChange={(v) => setItemField(it.id, "fgts", v)} />
-                            <MoneyInput label="Subsídio federal" value={it.subsidioFederal} onChange={(v) => setItemField(it.id, "subsidioFederal", v)} />
-                            <MoneyInput label="Subsídio estadual" value={it.subsidioEstadual} onChange={(v) => setItemField(it.id, "subsidioEstadual", v)} />
-                            <MoneyInput label="Subsídio municipal" value={it.subsidioMunicipal} onChange={(v) => setItemField(it.id, "subsidioMunicipal", v)} />
-                            <MoneyInput label="Documentação" value={it.estimativaDocumentacao} onChange={(v) => setItemField(it.id, "estimativaDocumentacao", v)} />
-                            <NumberInput label="Taxa de juros (%)" value={it.taxaJuros} onChange={(v) => setItemField(it.id, "taxaJuros", v)} />
-                            <MoneyInput label="Renda bruta familiar" value={it.rendaBrutaFamiliar} onChange={(v) => setItemField(it.id, "rendaBrutaFamiliar", v)} />
-                            <TextArea label="Observação" value={it.observacao} onChange={(v) => setItemField(it.id, "observacao", v)} />
-                          </Grid>
+  <MoneyInput
+    label="Saldo financiamento"
+    value={it.saldoFinanciamento ?? saldoSug}
+    onChange={(v: number | null) =>
+      setItemField(it.id, "saldoFinanciamento", v)
+    }
+  />
+
+  <MoneyInput
+    label="Parcela financiamento"
+    value={it.parcelaFinanciamento}
+    onChange={(v: number | null) =>
+      setItemField(it.id, "parcelaFinanciamento", v)
+    }
+  />
+
+  <MoneyInput
+    label="FGTS"
+    value={it.fgts}
+    onChange={(v: number | null) =>
+      setItemField(it.id, "fgts", v)
+    }
+  />
+
+  <MoneyInput
+    label="Subsídio federal"
+    value={it.subsidioFederal}
+    onChange={(v: number | null) =>
+      setItemField(it.id, "subsidioFederal", v)
+    }
+  />
+
+  <MoneyInput
+    label="Subsídio estadual"
+    value={it.subsidioEstadual}
+    onChange={(v: number | null) =>
+      setItemField(it.id, "subsidioEstadual", v)
+    }
+  />
+
+  <MoneyInput
+    label="Subsídio municipal"
+    value={it.subsidioMunicipal}
+    onChange={(v: number | null) =>
+      setItemField(it.id, "subsidioMunicipal", v)
+    }
+  />
+
+  <MoneyInput
+    label="Documentação"
+    value={it.estimativaDocumentacao}
+    onChange={(v: number | null) =>
+      setItemField(it.id, "estimativaDocumentacao", v)
+    }
+  />
+
+  <NumberInput
+    label="Taxa de juros (%)"
+    value={it.taxaJuros}
+    onChange={(v: number | null) =>
+      setItemField(it.id, "taxaJuros", v)
+    }
+  />
+
+  <MoneyInput
+    label="Renda bruta familiar"
+    value={it.rendaBrutaFamiliar}
+    onChange={(v: number | null) =>
+      setItemField(it.id, "rendaBrutaFamiliar", v)
+    }
+  />
+
+  <TextArea
+    label="Observação"
+    value={it.observacao}
+    onChange={(v: string) =>
+      setItemField(it.id, "observacao", v)
+    }
+  />
+</Grid>
+
                         </section>
                       )}
 
