@@ -220,16 +220,17 @@ export default function ComparativoPublicClient({ comparativo }: { comparativo: 
     if (!el) return;
 
     // pins (lat/lng do empreendimento)
-    const pins = items
-      .map((x) => {
-        const lat = x.emp?.lat;
-        const lng = x.emp?.lng;
-        if (typeof lat !== "number" || typeof lng !== "number") return null;
-        return { lat, lng, x };
-      })
-      .filter(Boolean) as any[];
+   const pins = items
+  .map((x: any) => {
+    const lat = x.emp?.lat;
+    const lng = x.emp?.lng;
+    if (typeof lat !== "number" || typeof lng !== "number") return null;
+    return { lat, lng, x };
+  })
+  .filter(Boolean) as { lat: number; lng: number; x: any }[];
 
-    if (pins.length === 0) return;
+if (pins.length === 0) return;
+
 
     const center = { lat: pins[0].lat, lng: pins[0].lng };
     const map = new google.maps.Map(el, { center, zoom: 12 });
@@ -300,7 +301,7 @@ export default function ComparativoPublicClient({ comparativo }: { comparativo: 
       <div className="max-w-7xl mx-auto px-4 pb-10">
         <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
 
-          {items.map((x) => {
+          {items.map((x: any) => {
             const dict = labelValuePairs(x);
 
             // imagens
