@@ -10,7 +10,7 @@ export async function GET(req: Request) {
   const list = await prisma.construtora.findMany({
     where: { tenantId: tenant.id },
     orderBy: { name: "asc" },
-    select: { id: true, name: true },
+    select: { id: true, name: true, observacao: true },
   });
 
   return Response.json(list);

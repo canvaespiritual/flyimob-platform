@@ -1,5 +1,12 @@
 import { prisma } from "../../../../lib/prisma";
 
+function txt(form: FormData, key: string) {
+  const v = form.get(key);
+  if (v == null) return null;
+  const s = String(v).trim();
+  return s ? s : null;
+}
+
 export async function POST(req: Request) {
   const form = await req.formData();
     const lat = form.get("lat") ? Number(form.get("lat")) : null;
@@ -54,6 +61,7 @@ const cep = form.get("cep") ? String(form.get("cep")) : null;
       endereco,
       construtoraId,
       descricao: descricao || null,
+      observacao: txt(form, "observacao"), 
       dataLancamento,
       dataEntrega,
       contatoNome: contatoNome || null,

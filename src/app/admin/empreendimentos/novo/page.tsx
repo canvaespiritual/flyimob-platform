@@ -93,6 +93,20 @@ export default async function NovoEmpreendimentoPage() {
             maxLength={1000}
           />
         </div>
+              <div className="space-y-2">
+  <label className="text-sm font-medium">
+    Observações internas (opcional)
+  </label>
+  <textarea
+    name="observacao"
+    placeholder="Ponto de referência, política de negociação, flexibilidade de desconto, cultura da construtora, etc."
+    className="border rounded px-3 py-2 w-full min-h-[100px]"
+    maxLength={1000}
+  />
+  <div className="text-xs text-gray-500">
+    Informação interna para corretores (não aparece no público automaticamente).
+  </div>
+</div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div className="space-y-2">

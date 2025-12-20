@@ -1,4 +1,11 @@
 import { prisma } from "../../../../lib/prisma";
+function txt(form: FormData, key: string) {
+  const v = form.get(key);
+  if (v == null) return null;
+  const s = String(v).trim();
+  return s ? s : null;
+}
+
 
 export async function POST(req: Request) {
   const form = await req.formData();
@@ -56,6 +63,8 @@ export async function POST(req: Request) {
 
     endereco,
     descricao: descricao || null,
+    observacao: txt(form, "observacao"),
+
     dataLancamento,
     dataEntrega,
 

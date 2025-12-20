@@ -85,6 +85,8 @@ model Construtora {
   endereco  String?
   responsavelComercial String?
   whatsappComercial    String?
+  observacao String?
+
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -124,6 +126,8 @@ model Empreendimento {
   contatoNome     String?
   contatoTelefone String?
   contatoWhatsapp String?
+  observacao String?
+
 
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt

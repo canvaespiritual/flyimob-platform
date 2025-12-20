@@ -30,6 +30,7 @@ export default async function EditEmpreendimentoPage(
       uf: true,
       cep: true,
       descricao: true,
+      observacao: true, 
       dataLancamento: true,
       dataEntrega: true,
       contatoNome: true,
@@ -164,6 +165,21 @@ export default async function EditEmpreendimentoPage(
             maxLength={1000}
           />
         </div>
+            <div className="space-y-2">
+  <label className="text-sm font-medium">
+    Observações internas
+  </label>
+  <textarea
+    name="observacao"
+    defaultValue={empreendimento.observacao ?? ""}
+    className="border rounded px-3 py-2 w-full min-h-[100px]"
+    placeholder="Ponto de referência, política de desconto, cultura da construtora, observações comerciais..."
+    maxLength={1000}
+  />
+  <div className="text-xs text-gray-500">
+    Campo interno. Não aparece para o cliente final.
+  </div>
+</div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div className="space-y-2">

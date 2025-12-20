@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { prisma } from "../../../../../lib/prisma";
+import ConfirmDeleteButton from "../../../../../components/ConfirmDeleteButton";
 
 export default async function EditConstrutoraPage({
   params,
@@ -22,6 +23,7 @@ export default async function EditConstrutoraPage({
       endereco: true,
       responsavelComercial: true,
       whatsappComercial: true,
+      observacao: true, 
       _count: { select: { empreendimentos: true } },
     },
   });
@@ -137,6 +139,19 @@ export default async function EditConstrutoraPage({
               />
             </div>
           </div>
+          <div className="space-y-1">
+  <label className="text-sm font-medium">Observação</label>
+  <textarea
+    name="observacao"
+    defaultValue={construtora.observacao ?? ""}
+    className="border rounded px-3 py-2 w-full min-h-[110px]"
+    placeholder="Ponto de referência, política de negociação, cultura da construtora, contatos internos, etc."
+  />
+  <div className="text-xs text-gray-500">
+    (Campo interno para você. Pode usar para lembretes e regras comerciais.)
+  </div>
+</div>
+
 
           <div className="flex items-center justify-between pt-2">
             <button className="border rounded px-4 py-2 hover:bg-gray-50">
@@ -144,12 +159,14 @@ export default async function EditConstrutoraPage({
             </button>
 
             {podeExcluir ? (
-              <button
-                formAction="/api/construtoras/delete"
-                className="border rounded px-4 py-2 hover:bg-gray-50"
-              >
-                Excluir
-              </button>
+             <ConfirmDeleteButton
+  formAction="/api/construtoras/delete"
+  className="border rounded px-4 py-2 hover:bg-gray-50"
+>
+  Excluir
+</ConfirmDeleteButton>
+
+
             ) : (
               <div className="text-xs text-gray-500">
                 (Não pode excluir: vinculada a empreendimentos.)
