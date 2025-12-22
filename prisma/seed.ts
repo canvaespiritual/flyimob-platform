@@ -1,11 +1,12 @@
+// prisma/seed.ts
 import { PrismaClient, TenantType, UserRole } from "@prisma/client";
+import { hashPassword } from "../src/lib/auth.server";
 
 const prisma = new PrismaClient();
 
 async function main() {
   const tenantSlug = "flyimob";
 
-  // 1) Tenant FlyImob (idempotente)
   const tenant = await prisma.tenant.upsert({
     where: { slug: tenantSlug },
     update: {},
@@ -16,9 +17,14 @@ async function main() {
     },
   });
 
-  // 2) Usuário OWNER (idempotente)
-  // Troque email/nome pelos seus (ou deixa assim e ajusta depois)
   const ownerEmail = "gustavopradoc@gmail.com";
+  const ownerPass = process.env.OWNER_PASSWORD || "";
+
+  if (!ownerPass) {
+    console.log("⚠️ OWNER_PASSWORD vazio. Não vou setar senha.");
+  }
+
+  const ownerHash = ownerPass ? await hashPassword(ownerPass) : null;
 
   await prisma.user.upsert({
     where: { email: ownerEmail },
@@ -26,12 +32,14 @@ async function main() {
       tenantId: tenant.id,
       role: UserRole.OWNER,
       name: "Admin FlyImob",
+      ...(ownerHash ? { passwordHash: ownerHash } : {}),
     },
     create: {
       tenantId: tenant.id,
       email: ownerEmail,
       name: "Admin FlyImob",
       role: UserRole.OWNER,
+      passwordHash: ownerHash,
     },
   });
 

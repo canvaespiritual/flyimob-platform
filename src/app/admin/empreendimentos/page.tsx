@@ -2,11 +2,15 @@ import DeleteButton from "./DeleteButton";
 import Link from "next/link";
 import { prisma } from "../../../lib/prisma";
 
+type SP = { [key: string]: string | string[] | undefined };
+
 export default async function EmpreendimentosPage({
   searchParams,
 }: {
-  searchParams?: { [key: string]: string | string[] | undefined };
+  searchParams?: Promise<SP> | SP;
 }) {
+  const sp = await Promise.resolve(searchParams);
+
   const tenant = await prisma.tenant.findUnique({ where: { slug: "flyimob" } });
   if (!tenant) return <div className="p-6">Tenant flyimob não encontrado.</div>;
 
@@ -14,13 +18,19 @@ export default async function EmpreendimentosPage({
   // Paginação e filtros
   // =========================
   const take = 10;
-  const page = Math.max(1, Number(searchParams?.page ?? 1) || 1);
+  const page = Math.max(1, Number(sp?.page ?? 1) || 1);
   const skip = (page - 1) * take;
 
-  const q = String(searchParams?.q ?? "").trim();
-  const status = String(searchParams?.status ?? "").trim(); // ATIVO | INATIVO | ""
-  const maxPrice = String(searchParams?.maxPrice ?? "").trim();
-  const maxPriceNum = maxPrice ? Number(maxPrice.replace(/[^\d]/g, "")) : null;
+  const q = String(sp?.q ?? "").trim();
+  const status = String(sp?.status ?? "").trim(); // ATIVO | INATIVO | ""
+  const maxPrice = String(sp?.maxPrice ?? "").trim();
+  const maxPriceNum = maxPrice
+    ? Number(maxPrice.replace(/[^\d]/g, ""))
+    : null;
+
+
+  // ... segue o resto do arquivo igual
+
 
   // =========================
   // WHERE dinâmico

@@ -2,15 +2,19 @@ import { prisma } from "../../../lib/prisma";
 import Link from "next/link";
 import ConfirmDeleteButton from "../../../components/ConfirmDeleteButton";
 
+type SP = { [key: string]: string | string[] | undefined };
+
 export default async function ConstrutorasPage({
   searchParams,
 }: {
-  searchParams?: { returnTo?: string };
+  searchParams?: Promise<SP> | SP;
 }) {
+  const sp = await Promise.resolve(searchParams);
+
   const tenant = await prisma.tenant.findUnique({ where: { slug: "flyimob" } });
   if (!tenant) return <div className="p-6">Tenant flyimob não encontrado.</div>;
 
-  const returnTo = searchParams?.returnTo || null;
+  const returnTo = typeof sp?.returnTo === "string" ? sp.returnTo : null;
 
   const construtoras = await prisma.construtora.findMany({
     where: { tenantId: tenant.id },
@@ -23,10 +27,11 @@ export default async function ConstrutorasPage({
       telefone: true,
       responsavelComercial: true,
       whatsappComercial: true,
-      observacao: true, // ✅ NOVO
+      observacao: true,
       _count: { select: { empreendimentos: true } },
     },
   });
+
 
   return (
     <div className="p-6">
