@@ -107,10 +107,12 @@ export default function ComparativoPublicClient({ comparativo }: { comparativo: 
   // ========= RENDER HELPERS =========
 
   function shouldShow(key: string) {
-    // se não tiver config, assume true
-    if (!config?.fields) return true;
-    return !!fields[key];
-  }
+  // campos críticos sempre aparecem
+  if (["entradaTotal", "valorTotal"].includes(key)) return true;
+
+  if (!config?.fields) return true;
+  return !!fields[key];
+}
 
   function labelValuePairs(x: any) {
     const { it, t, emp, valorBase, precoM2, entregaMeses, saldoSug } = x;
@@ -348,7 +350,7 @@ if (pins.length === 0) return;
                     {/* preço/m² é derivado: mostramos se marcado no checklist via key "precoM2"? 
                         Você pode adicionar "precoM2" na config depois; por enquanto ele entra como secundário mesmo. */}
                     {layout.secondary.map((k: string) => renderMetric(k, dict))}
-                    {renderMetric("precoM2", dict)}
+                   
                   </div>
 
                   {/* TERCIÁRIOS (lista limpa) */}
