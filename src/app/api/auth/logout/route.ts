@@ -1,6 +1,7 @@
-// src/app/api/auth/logout/route.ts
 import { NextRequest, NextResponse } from "next/server";
-import { sessionCookieName } from "@/lib/auth"; // ajuste se no seu projeto estiver em "@/lib/auth.server"
+import { sessionCookieName } from "@/lib/auth";
+
+const APP_URL = process.env.APP_URL || "http://localhost:3000";
 
 function clearSessionCookie(res: NextResponse) {
   res.cookies.set(sessionCookieName, "", {
@@ -12,24 +13,14 @@ function clearSessionCookie(res: NextResponse) {
   });
 }
 
-export async function GET(req: NextRequest) {
-  const url = new URL(req.url);
-
-  // opcional: se quiser respeitar ?returnTo=...
-  const returnTo = url.searchParams.get("returnTo") || "/login";
-
-  const res = NextResponse.redirect(new URL(returnTo, url.origin));
+export async function GET(_req: NextRequest) {
+  const res = NextResponse.redirect(`${APP_URL}/login`);
   clearSessionCookie(res);
   return res;
 }
 
-export async function POST(req: NextRequest) {
-  const url = new URL(req.url);
-
-  // para POST, também redireciona (evita tela JSON)
-  const returnTo = url.searchParams.get("returnTo") || "/login";
-
-  const res = NextResponse.redirect(new URL(returnTo, url.origin));
+export async function POST(_req: NextRequest) {
+  const res = NextResponse.redirect(`${APP_URL}/login`);
   clearSessionCookie(res);
   return res;
 }
