@@ -2,14 +2,19 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { UserRole } from "@prisma/client";
+import { hasPermission } from "@/lib/rbac";
 
-const NAV = [
-  { href: "/admin/empreendimentos", label: "Empreendimentos" },
-  { href: "/admin/construtoras", label: "Construtoras" },
-  { href: "/admin/comparativos", label: "Comparativos" },
-  { href: "/admin/clientes", label: "Clientes" },
-  { href: "/admin/dashboard", label: "Dashboard" },
+type NavItem = { href: string; label: string; perm?: Parameters<typeof hasPermission>[1] };
+
+const ALL_NAV: NavItem[] = [
+  { href: "/admin/empreendimentos", label: "Empreendimentos", perm: "data:manage" },
+  { href: "/admin/construtoras", label: "Construtoras", perm: "data:manage" },
+  { href: "/admin/comparativos", label: "Comparativos", perm: "comparativos:use" },
+  { href: "/admin/clientes", label: "Clientes", perm: "crm:use" }, // pode remover por ora
+  { href: "/admin/dashboard", label: "Dashboard", perm: "dashboard:view" },
+  { href: "/admin/usuarios", label: "Usuários", perm: "users:read" },
 ];
 
 function isActive(pathname: string, href: string) {
@@ -19,9 +24,13 @@ function isActive(pathname: string, href: string) {
 function Sidebar({
   pathname,
   onNavigate,
+  nav,
+  tenantSlug,
 }: {
   pathname: string;
   onNavigate?: () => void;
+  nav: NavItem[];
+  tenantSlug: string;
 }) {
   return (
     <aside className="h-full w-[260px] border-r bg-white flex flex-col">
@@ -34,7 +43,7 @@ function Sidebar({
       </div>
 
       <nav className="p-3 space-y-1">
-        {NAV.map((item) => {
+        {nav.map((item) => {
           const active = isActive(pathname, item.href);
           return (
             <Link
@@ -51,13 +60,8 @@ function Sidebar({
               <span className={active ? "text-gray-900 font-medium" : "text-gray-700"}>
                 {item.label}
               </span>
-
               {active && (
-                <span
-                  className="w-2 h-2 rounded-full"
-                  style={{ backgroundColor: "#F37021" }}
-                  aria-hidden
-                />
+                <span className="w-2 h-2 rounded-full" style={{ backgroundColor: "#F37021" }} />
               )}
             </Link>
           );
@@ -66,7 +70,7 @@ function Sidebar({
 
       <div className="mt-auto p-4 border-t">
         <div className="text-xs text-gray-500">
-          Versão MVP • <span className="font-mono">flyimob</span>
+          Versão MVP • <span className="font-mono">{tenantSlug}</span>
         </div>
         <div className="mt-2 h-[2px] w-full bg-gray-100 rounded" />
         <div className="mt-2 h-[2px] w-2/3 rounded" style={{ backgroundColor: "#1FB6B2" }} />
@@ -75,37 +79,50 @@ function Sidebar({
   );
 }
 
-export default function AdminShell({ children }: { children: React.ReactNode }) {
+export default function AdminShell({
+  children,
+  tenantSlug,
+  tenantName,
+  userName,
+  userRole,
+}: {
+  children: React.ReactNode;
+  tenantSlug: string;
+  tenantName: string;
+  userName: string;
+  userRole: UserRole;
+}) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
+
+  const nav = useMemo(() => {
+    return ALL_NAV.filter((i) => !i.perm || hasPermission(userRole, i.perm));
+  }, [userRole]);
 
   return (
     <div className="min-h-screen bg-white">
       <div className="flex min-h-screen">
-        {/* Sidebar desktop */}
         <div className="hidden md:block">
-          <Sidebar pathname={pathname} />
+          <Sidebar pathname={pathname} nav={nav} tenantSlug={tenantSlug} />
         </div>
 
-        {/* Drawer mobile */}
         {open && (
           <div className="fixed inset-0 z-[9999] md:hidden">
-            <div
-              className="absolute inset-0 bg-black/40"
-              onClick={() => setOpen(false)}
-            />
+            <div className="absolute inset-0 bg-black/40" onClick={() => setOpen(false)} />
             <div className="absolute left-0 top-0 h-full">
-              <Sidebar pathname={pathname} onNavigate={() => setOpen(false)} />
+              <Sidebar
+                pathname={pathname}
+                nav={nav}
+                tenantSlug={tenantSlug}
+                onNavigate={() => setOpen(false)}
+              />
             </div>
           </div>
         )}
 
-        {/* Content */}
         <div className="flex-1 flex flex-col min-w-0">
-          {/* Topbar */}
           <header className="h-16 border-b bg-white px-4 md:px-6 flex items-center justify-between">
             <div className="flex items-center gap-3">
-              {/* Botão mobile */}
               <button
                 type="button"
                 className="md:hidden border rounded px-3 py-2 hover:bg-gray-50"
@@ -115,32 +132,26 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
                 ☰
               </button>
 
-              <div className="flex items-center gap-3">
-                <div
-                  className="w-2.5 h-2.5 rounded-full"
-                  style={{ backgroundColor: "#1FB6B2" }}
-                  aria-hidden
-                />
-                <div className="text-sm text-gray-700">Área administrativa</div>
+              <div className="text-sm text-gray-700">
+                {tenantName} • <span className="font-mono">{tenantSlug}</span>
               </div>
             </div>
 
             <div className="flex items-center gap-3">
-              <a
-                href="/"
-                className="text-sm border rounded px-3 py-2 hover:bg-gray-50"
-                title="Voltar ao mapa público"
-              >
+              <a href="/" className="text-sm border rounded px-3 py-2 hover:bg-gray-50">
                 Ver mapa
               </a>
 
-              <div
-                className="hidden sm:block text-sm px-3 py-2 rounded border"
-                style={{ borderColor: "rgba(31,182,178,0.35)" }}
-              >
-                <span className="text-gray-500">Tenant:</span>{" "}
-                <span className="font-mono text-gray-900">flyimob</span>
+              <div className="hidden sm:block text-sm px-3 py-2 rounded border">
+                <span className="text-gray-500">{userName}</span>{" "}
+                <span className="font-mono text-gray-700">({userRole})</span>
               </div>
+
+              <form action="/api/auth/logout" method="post">
+                <button className="text-sm border rounded px-3 py-2 hover:bg-gray-50" type="submit">
+                  Sair
+                </button>
+              </form>
             </div>
           </header>
 

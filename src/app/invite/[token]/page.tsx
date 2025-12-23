@@ -1,16 +1,19 @@
-// src/app/invite/[token]/page.tsx
+import AcceptInviteForm from "./AcceptInviteForm";
 
-type Props = {
-  params: { token: string };
-  searchParams?: Record<string, string | string[] | undefined>;
-};
+export const dynamic = "force-dynamic";
 
-export default function InviteTokenPage({ params }: Props) {
+export default function InviteTokenPage({ params }: { params: { token: string } }) {
   return (
-    <div style={{ padding: 24 }}>
-      <h1>Convite</h1>
-      <p>Token: <code>{params.token}</code></p>
-      <p>Próximo passo: aqui vai a tela de definir senha / aceitar convite.</p>
+    <div className="min-h-screen flex items-center justify-center p-6">
+      <div className="w-full max-w-md border rounded-lg p-6">
+        <h1 className="text-lg font-semibold">Aceitar convite</h1>
+        <p className="text-sm text-gray-600 mt-2">
+          Defina uma senha para ativar seu acesso.
+        </p>
+        <div className="mt-4">
+          <AcceptInviteForm token={params.token} />
+        </div>
+      </div>
     </div>
   );
 }

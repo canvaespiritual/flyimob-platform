@@ -1,14 +1,13 @@
 // src/app/login/page.tsx
 import LoginForm from "./LoginForm";
 
-export const dynamic = "force-dynamic"; // evita prerender do /login
+type LoginPageProps = {
+  searchParams?: Promise<{ returnTo?: string }>;
+};
 
-export default function LoginPage({
-  searchParams,
-}: {
-  searchParams?: { returnTo?: string };
-}) {
-  const returnTo = searchParams?.returnTo ?? "/admin/construtoras";
+export default async function LoginPage({ searchParams }: LoginPageProps) {
+  const sp = (await searchParams) ?? {};
+  const returnTo = sp.returnTo ?? "/admin";
 
   return (
     <div className="min-h-screen flex items-center justify-center p-6">
