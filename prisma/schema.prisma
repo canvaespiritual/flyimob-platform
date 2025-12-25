@@ -85,20 +85,21 @@ model User {
   telefone     String?
   creci        String?
   observacao   String?
-  
-  brokerLevel  BrokerLevel?
 
- 
+  brokerLevel BrokerLevel?
+
   supervisorId String?
-  supervisor   User?    @relation("UserSupervisor", fields: [supervisorId], references: [id])
-  subordinates User[]   @relation("UserSupervisor")
+  supervisor   User?   @relation("UserSupervisor", fields: [supervisorId], references: [id])
+  subordinates User[]  @relation("UserSupervisor")
 
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   tenant              Tenant               @relation(fields: [tenantId], references: [id])
   passwordResetTokens PasswordResetToken[]
   invitesSent         Invite[]             @relation("InvitesSent")
+
+  inviteTokensSent UserInviteToken[] @relation("InviteTokensSent")
 
   @@index([tenantId])
   @@index([supervisorId])
@@ -126,19 +127,22 @@ model Invite {
 }
 
 model UserInviteToken {
-  id        String    @id @default(cuid())
-  token     String    @unique
-  tenantId  String
-  email     String
-  role      UserRole  @default(BROKER)
-  expiresAt DateTime
-  usedAt    DateTime?
-  createdAt DateTime  @default(now())
+  id          String    @id @default(cuid())
+  token       String    @unique
+  tenantId    String
+  email       String
+  role        UserRole  @default(BROKER)
+  expiresAt   DateTime
+  usedAt      DateTime?
+  createdAt   DateTime  @default(now())
+  invitedById String?
+  invitedBy   User?     @relation("InviteTokensSent", fields: [invitedById], references: [id])
 
   tenant Tenant @relation(fields: [tenantId], references: [id])
 
   @@index([tenantId])
   @@index([email])
+  @@index([invitedById])
 }
 
 model PasswordResetToken {

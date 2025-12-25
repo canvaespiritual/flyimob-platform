@@ -52,6 +52,7 @@ export async function POST(req: Request) {
       email,
       role,
       expiresAt,
+      invitedById: s.user.id,
     },
   });
 

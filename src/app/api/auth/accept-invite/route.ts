@@ -33,7 +33,7 @@ export async function POST(req: Request) {
       name: String(body?.name ?? "").trim() || inv.email.split("@")[0],
       role: inv.role,
       passwordHash,
-      supervisorId: inv.invitedById,
+      supervisorId: inv.invitedById ?? null,
     },
   });
 
