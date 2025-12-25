@@ -34,6 +34,8 @@ export async function getSessionUser() {
       id: user.tenant.id,
       name: user.tenant.name,
       slug: user.tenant.slug,
+      isPlatform: user.tenant.isPlatform,   // ADD
+     parentId: user.tenant.parentId ?? null // opcional
     },
   };
 }

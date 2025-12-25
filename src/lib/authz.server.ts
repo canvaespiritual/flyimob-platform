@@ -26,3 +26,11 @@ export function assertCanInvite(inviterRole: UserRole, targetRole: UserRole) {
     throw err;
   }
 }
+
+export async function requirePlatformOwner() {
+  const s = await requireUser();
+  if (!s.tenant.isPlatform || s.user.role !== "OWNER") {
+    redirect("/admin/forbidden");
+  }
+  return s;
+}

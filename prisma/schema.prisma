@@ -20,6 +20,13 @@ enum UserRole {
   DATA_ENTRY // operador de cadastro
 }
 
+enum BrokerLevel {
+  ATENDENTE
+  ESTAGIARIO
+  INTERMEDIARIO
+  SENIOR
+}
+
 enum EmpreendimentoTipo {
   CONDOMINIO_VERTICAL
   CONDOMINIO_CASAS
@@ -53,11 +60,17 @@ model Tenant {
   createdAt DateTime   @default(now())
   updatedAt DateTime   @updatedAt
 
+  isPlatform Boolean  @default(false)
+  parentId   String?
+  parent     Tenant?  @relation("TenantHierarchy", fields: [parentId], references: [id])
+  children   Tenant[] @relation("TenantHierarchy")
+
   users           User[]
   construtoras    Construtora[]
   empreendimentos Empreendimento[]
   comparativos    Comparativo[] // 👈 NOVO
   inviteTokens    UserInviteToken[]
+  invites         Invite[]          @relation("TenantInvites")
 }
 
 model User {
@@ -68,11 +81,48 @@ model User {
   passwordHash String?
   role         UserRole @default(OWNER)
   isActive     Boolean  @default(true)
+  whatsapp     String?
+  telefone     String?
+  creci        String?
+  observacao   String?
+  
+  brokerLevel  BrokerLevel?
+
+ 
+  supervisorId String?
+  supervisor   User?    @relation("UserSupervisor", fields: [supervisorId], references: [id])
+  subordinates User[]   @relation("UserSupervisor")
+
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
   tenant              Tenant               @relation(fields: [tenantId], references: [id])
   passwordResetTokens PasswordResetToken[]
+  invitesSent         Invite[]             @relation("InvitesSent")
+
+  @@index([tenantId])
+  @@index([supervisorId])
+  @@index([role])
+}
+
+model Invite {
+  id          String      @id @default(cuid())
+  email       String
+  token       String      @unique
+  role        UserRole
+  tenantId    String?
+  tenantType  TenantType?
+  invitedById String
+
+  acceptedAt DateTime?
+  expiresAt  DateTime
+
+  createdAt DateTime @default(now())
+
+  tenant    Tenant? @relation("TenantInvites", fields: [tenantId], references: [id])
+  invitedBy User    @relation("InvitesSent", fields: [invitedById], references: [id])
+
+  @@index([email])
 }
 
 model UserInviteToken {

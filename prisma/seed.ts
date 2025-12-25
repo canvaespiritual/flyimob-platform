@@ -5,45 +5,99 @@ import { hashPassword } from "../src/lib/auth.server";
 const prisma = new PrismaClient();
 
 async function main() {
-  const tenantSlug = "flyimob";
-
-  const tenant = await prisma.tenant.upsert({
-    where: { slug: tenantSlug },
-    update: {},
+  /**
+   * ===============================
+   * TENANT PLATAFORMA (OWNER-GLOBAL)
+   * ===============================
+   */
+  const platformTenant = await prisma.tenant.upsert({
+    where: { slug: "flyimob" },
+    update: { isPlatform: true },
     create: {
-      name: "FlyImob",
-      slug: tenantSlug,
+      name: "FlyImob Platform",
+      slug: "flyimob",
       type: TenantType.IMOBILIARIA,
+      isPlatform: true,
     },
   });
 
-  const ownerEmail = "gustavopradoc@gmail.com";
-  const ownerPass = process.env.OWNER_PASSWORD || "";
-
-  if (!ownerPass) {
-    console.log("⚠️ OWNER_PASSWORD vazio. Não vou setar senha.");
-  }
-
-  const ownerHash = ownerPass ? await hashPassword(ownerPass) : null;
+  /**
+   * OWNER-GLOBAL (PLATAFORMA)
+   */
+  const platformOwnerEmail = "contato.flyimob@gmail.com";
+  const platformOwnerPassword = "Crailgra272";
+  const platformOwnerHash = await hashPassword(platformOwnerPassword);
 
   await prisma.user.upsert({
-    where: { email: ownerEmail },
+    where: { email: platformOwnerEmail },
     update: {
-      tenantId: tenant.id,
+      tenantId: platformTenant.id,
       role: UserRole.OWNER,
-      name: "Admin FlyImob",
-      ...(ownerHash ? { passwordHash: ownerHash } : {}),
+      name: "FlyImob Platform Owner",
+      isActive: true,
+      passwordHash: platformOwnerHash,
     },
     create: {
-      tenantId: tenant.id,
-      email: ownerEmail,
-      name: "Admin FlyImob",
+      tenantId: platformTenant.id,
+      email: platformOwnerEmail,
+      name: "FlyImob Platform Owner",
       role: UserRole.OWNER,
-      passwordHash: ownerHash,
+      isActive: true,
+      passwordHash: platformOwnerHash,
     },
   });
 
-  console.log("✅ Seed concluído:", { tenant: tenant.slug, ownerEmail });
+  /**
+   * ===============================
+   * TENANT OPERAÇÃO (BRASÍLIA)
+   * ===============================
+   */
+  const brasiliaTenant = await prisma.tenant.upsert({
+    where: { slug: "fly-imob-brasilia" },
+    update: {},
+    create: {
+      name: "FlyImob Brasília",
+      slug: "fly-imob-brasilia",
+      type: TenantType.IMOBILIARIA,
+      parentId: platformTenant.id,
+      isPlatform: false,
+    },
+  });
+
+  /**
+   * OWNER DA FRANQUIA BRASÍLIA
+   */
+  const brasiliaOwnerEmail = "gustavopradoc@gmail.com";
+  const brasiliaOwnerPassword =
+    process.env.OWNER_PASSWORD || "Crailgra272";
+  const brasiliaOwnerHash = await hashPassword(brasiliaOwnerPassword);
+
+  await prisma.user.upsert({
+    where: { email: brasiliaOwnerEmail },
+    update: {
+      tenantId: brasiliaTenant.id,
+      role: UserRole.OWNER,
+      name: "Admin FlyImob Brasília",
+      isActive: true,
+      passwordHash: brasiliaOwnerHash,
+    },
+    create: {
+      tenantId: brasiliaTenant.id,
+      email: brasiliaOwnerEmail,
+      name: "Admin FlyImob Brasília",
+      role: UserRole.OWNER,
+      isActive: true,
+      passwordHash: brasiliaOwnerHash,
+    },
+  });
+
+  console.log("✅ Seed concluído com sucesso:");
+  console.log({
+    platformTenant: platformTenant.slug,
+    platformOwner: platformOwnerEmail,
+    brasiliaTenant: brasiliaTenant.slug,
+    brasiliaOwner: brasiliaOwnerEmail,
+  });
 }
 
 main()

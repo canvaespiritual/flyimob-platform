@@ -30,9 +30,10 @@ export async function POST(req: Request) {
     data: {
       tenantId: inv.tenantId,
       email: inv.email,
-      name: inv.email.split("@")[0], // depois você pode pedir nome
+      name: String(body?.name ?? "").trim() || inv.email.split("@")[0],
       role: inv.role,
       passwordHash,
+      supervisorId: inv.invitedById,
     },
   });
 
