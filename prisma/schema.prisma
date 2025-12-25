@@ -52,6 +52,21 @@ enum EmpreendimentoStatus {
   INATIVO
 }
 
+enum LeadStatus {
+  CONTATO_INICIAL
+  STANDBY
+  APROVADO
+  VENDIDO
+  EXCLUIDO
+}
+
+enum LeadOrigin {
+  CAMPANHA_TRAFEGO
+  INDICACAO
+  LISTA
+  ACAO_EXTERNA
+}
+
 model Tenant {
   id        String     @id @default(cuid())
   name      String
@@ -71,6 +86,7 @@ model Tenant {
   comparativos    Comparativo[] // 👈 NOVO
   inviteTokens    UserInviteToken[]
   invites         Invite[]          @relation("TenantInvites")
+  crmleads        CRMLead[]
 }
 
 model User {
@@ -100,6 +116,7 @@ model User {
   invitesSent         Invite[]             @relation("InvitesSent")
 
   inviteTokensSent UserInviteToken[] @relation("InviteTokensSent")
+  crmLeads         CRMLead[]
 
   @@index([tenantId])
   @@index([supervisorId])
@@ -382,4 +399,36 @@ model ComparativoItem {
 
   @@index([comparativoId])
   @@index([tipologiaId])
+}
+
+model CRMLead {
+  id       String @id @default(cuid())
+  tenantId String
+  ownerId  String // quem criou (corretor / gerente / diretor / owner)
+
+  // campos
+  nome           String
+  telefone       String?
+  email          String?
+  rendaBruta     Float?
+  entrada        Float?
+  fgts           Float?
+  dataNascimento DateTime?
+  origem         LeadOrigin?
+  interesse      String?
+  status         LeadStatus  @default(CONTATO_INICIAL)
+  contextoGeral  String? // até 1500 chars (vamos validar no backend)
+
+  // (opcional agora, mas já pronto p/ follow-up futuramente)
+  nextFollowUpAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+  owner  User   @relation(fields: [ownerId], references: [id])
+
+  @@index([tenantId])
+  @@index([ownerId])
+  @@index([status])
 }

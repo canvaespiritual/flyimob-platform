@@ -4,9 +4,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSessionIdFromReq, redirectToLogin } from "./lib/auth.edge";
 
 
+
 export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
-
+// ✅ Deixa as rotas da API seguirem direto (os handlers já fazem auth com requirePermission)
+if (req.nextUrl.pathname.startsWith("/api/")) {
+  return NextResponse.next();
+}
   console.log("MIDDLEWARE HIT:", pathname);
 
   // liberar rotas públicas essenciais
