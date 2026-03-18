@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requirePermission } from "@/lib/authz.server";
-import { LeadOrigin } from "@prisma/client";
+import { LeadHeat, LeadOrigin } from "@prisma/client";
 
 function numOrNull(v: any) {
   if (v === null || v === undefined || v === "") return null;
@@ -51,7 +51,16 @@ function originOrNull(v: any): LeadOrigin | null {
   // 3) não reconheceu -> null (não derruba sua criação/edição)
   return null;
 }
+function heatOrNull(v: any): LeadHeat | null {
+  if (v === null || v === undefined || v === "") return null;
 
+  const up = String(v).trim().toUpperCase();
+  const allowed = new Set(Object.values(LeadHeat));
+
+  if (allowed.has(up as LeadHeat)) return up as LeadHeat;
+
+  return null;
+}
 export async function GET() {
   const s = await requirePermission("crm:use");
 
@@ -95,8 +104,9 @@ export async function POST(req: NextRequest) {
         origem: body?.origem !== undefined ? originOrNull(body.origem) : null,
 
         interesse: body?.interesse ? String(body.interesse) : null,
-        status: body?.status ?? "CONTATO_INICIAL",
-        contextoGeral,
+status: body?.status ?? "CONTATO_INICIAL",
+calorVenda: body?.calorVenda !== undefined ? heatOrNull(body.calorVenda) : null,
+contextoGeral,
         nextFollowUpAt: body?.nextFollowUpAt !== undefined ? dateOrNull(body.nextFollowUpAt) : null,
       },
     });

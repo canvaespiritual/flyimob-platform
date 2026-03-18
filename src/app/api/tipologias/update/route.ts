@@ -77,7 +77,6 @@ export async function POST(req: Request) {
     data: {
       nome: toText(form.get("nome")),
       descricao: toText(form.get("descricao")),
-
       quartos: toInt(form.get("quartos")),
       suites: toInt(form.get("suites")),
       vagas: toInt(form.get("vagas")),

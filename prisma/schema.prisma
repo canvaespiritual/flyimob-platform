@@ -66,7 +66,12 @@ enum LeadOrigin {
   LISTA
   ACAO_EXTERNA
 }
-
+enum LeadHeat {
+  FRIO
+  MORNO
+  QUENTE
+  MUITO_QUENTE
+}
 model Tenant {
   id        String     @id @default(cuid())
   name      String
@@ -417,6 +422,7 @@ model CRMLead {
   origem         LeadOrigin?
   interesse      String?
   status         LeadStatus  @default(CONTATO_INICIAL)
+  calorVenda     LeadHeat?
   contextoGeral  String? // até 1500 chars (vamos validar no backend)
 
   // (opcional agora, mas já pronto p/ follow-up futuramente)

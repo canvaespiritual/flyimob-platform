@@ -18,6 +18,7 @@ type Lead = {
   nextFollowUpAt: string | null;
   createdAt: string;
   updatedAt: string;
+  calorVenda: string | null;
 };
 
 const PAGE_SIZE = 15;
@@ -122,6 +123,7 @@ export default function CrmLeadsClient() {
   const [fContexto, setFContexto] = useState("");
   // AGORA: datetime-local => "YYYY-MM-DDTHH:mm"
   const [fFollowUp, setFFollowUp] = useState("");
+  const [fCalorVenda, setFCalorVenda] = useState("");
 
   function resetForm() {
     setFNome("");
@@ -136,6 +138,7 @@ export default function CrmLeadsClient() {
     setFStatus("CONTATO_INICIAL");
     setFContexto("");
     setFFollowUp("");
+    setFCalorVenda("");
   }
 
   function openCreate() {
@@ -159,7 +162,9 @@ export default function CrmLeadsClient() {
     setFContexto(l.contextoGeral ?? "");
     // datetime-local precisa de "YYYY-MM-DDTHH:mm"
     setFFollowUp(l.nextFollowUpAt ? l.nextFollowUpAt.slice(0, 16) : "");
+    setFCalorVenda(l.calorVenda ?? "");
     setModalOpen(true);
+    
   }
 
   async function load() {
@@ -266,6 +271,7 @@ export default function CrmLeadsClient() {
       contextoGeral: fContexto.trim() || null,
       // datetime-local => new Date("YYYY-MM-DDTHH:mm").toISOString()
       nextFollowUpAt: fFollowUp ? new Date(fFollowUp).toISOString() : null,
+      calorVenda: fCalorVenda || null,
     };
 
     try {
@@ -456,6 +462,7 @@ export default function CrmLeadsClient() {
                     )}
                     {l.email && <span>✉️ {l.email}</span>}
                     {l.rendaBruta != null && <span>Renda: {fmtMoney(l.rendaBruta)}</span>}
+                    {l.entrada != null && <span>Entrada: {fmtMoney(l.entrada)}</span>}
                   </div>
 
                   {l.interesse && (
@@ -466,18 +473,36 @@ export default function CrmLeadsClient() {
                 </div>
 
                 <div className="text-right space-y-1">
-                  <div className="text-xs font-mono text-gray-700">
-                    {STATUS_LABELS[l.status] || l.status}
-                  </div>
+  <div className="space-y-1">
+    <div className="text-xs font-mono text-gray-700">
+      {STATUS_LABELS[l.status] || l.status}
+    </div>
 
-                  {l.nextFollowUpAt && (
-                    <div className={`text-xs ${overdue ? "text-red-700 font-semibold" : "text-gray-600"}`}>
-                      Follow-up: {fmtFollowup(l.nextFollowUpAt)}
-                      {overdue ? " (atrasado)" : ""}
-                    </div>
-                  )}
+    {l.calorVenda && (
+      <div
+        className={`inline-flex text-[10px] px-2 py-1 rounded font-semibold text-white ${
+          l.calorVenda === "FRIO"
+            ? "bg-slate-500"
+            : l.calorVenda === "MORNO"
+            ? "bg-yellow-500"
+            : l.calorVenda === "QUENTE"
+            ? "bg-orange-500"
+            : "bg-red-600"
+        }`}
+      >
+        {l.calorVenda === "MUITO_QUENTE" ? "MUITO QUENTE" : l.calorVenda}
+      </div>
+    )}
+  </div>
 
-                  <div className="flex gap-2 justify-end pt-1">
+  {l.nextFollowUpAt && (
+    <div className={`text-xs ${overdue ? "text-red-700 font-semibold" : "text-gray-600"}`}>
+      Follow-up: {fmtFollowup(l.nextFollowUpAt)}
+      {overdue ? " (atrasado)" : ""}
+    </div>
+  )}
+
+  <div className="flex gap-2 justify-end pt-1">
                     <button
                       className="text-xs border rounded px-2 py-1 hover:bg-gray-50"
                       onClick={() => openEdit(l)}
@@ -607,7 +632,17 @@ export default function CrmLeadsClient() {
                   <option value="VENDIDO">Vendido</option>
                   <option value="EXCLUIDO">Excluído</option>
                 </select>
-
+                <select
+  className="border rounded px-3 py-2 text-sm"
+  value={fCalorVenda}
+  onChange={(e) => setFCalorVenda(e.target.value)}
+>
+  <option value="">Calor de venda</option>
+  <option value="FRIO">Frio</option>
+  <option value="MORNO">Morno</option>
+  <option value="QUENTE">Quente</option>
+  <option value="MUITO_QUENTE">Muito quente</option>
+</select>
                 <input
                   className="border rounded px-3 py-2 text-sm"
                   placeholder="Renda bruta"

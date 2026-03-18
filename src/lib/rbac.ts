@@ -11,8 +11,6 @@ export type Permission =
 
 const rolePerms: Record<UserRole, Permission[]> = {
   OWNER:      ["data:manage", "comparativos:use", "users:read", "users:invite", "dashboard:view", "crm:use"],
-
-  // ❌ sem users:* para todos abaixo
   DIRECTOR:   ["data:manage", "comparativos:use", "dashboard:view", "crm:use"],
   MANAGER:    ["comparativos:use", "dashboard:view", "crm:use"],
   BROKER:     ["comparativos:use", "dashboard:view", "crm:use"],
