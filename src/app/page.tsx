@@ -58,7 +58,10 @@ export default function Home() {
   const [bounds, setBounds] = useState<BoundsLite | null>(null);
 const [empreendimentos, setEmpreendimentos] = useState<EmpreendimentoMap[]>([]);
 const [userMovedMap, setUserMovedMap] = useState(false);
-
+const [mapCenter, setMapCenter] = useState({
+  lat: -16.6869,
+  lng: -49.2648,
+});
 
 
   // UI state
@@ -114,7 +117,36 @@ const [userMovedMap, setUserMovedMap] = useState(false);
     })
     .catch(() => setEmpreendimentos([]));
 }, []);
+useEffect(() => {
+  if (!navigator.geolocation) return;
 
+  navigator.geolocation.getCurrentPosition(
+    (position) => {
+      const nextCenter = {
+        lat: position.coords.latitude,
+        lng: position.coords.longitude,
+      };
+
+      setMapCenter(nextCenter);
+      setUserMovedMap(true);
+
+      setBounds({
+        swLat: nextCenter.lat - 0.08,
+        swLng: nextCenter.lng - 0.08,
+        neLat: nextCenter.lat + 0.08,
+        neLng: nextCenter.lng + 0.08,
+      });
+    },
+    () => {
+      // Se negar localização, mantém Goiânia.
+    },
+    {
+      enableHighAccuracy: false,
+      timeout: 6000,
+      maximumAge: 1000 * 60 * 10,
+    }
+  );
+}, []);
   // filtra por bounds (zoom do mapa)
 const visiveisPorMapa = useMemo(() => {
   if (!bounds) return empreendimentos;
@@ -438,7 +470,8 @@ console.log(
   onTouchStart={() => setUserMovedMap(true)}
 >
   <MapView
-    empreendimentos={empreendimentos.map((e) => ({
+  center={mapCenter}
+  empreendimentos={empreendimentos.map((e) => ({
       id: e.id,
       nome: e.name,
       slug: e.slug,

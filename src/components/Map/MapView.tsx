@@ -16,16 +16,18 @@ type BoundsLite = {
   neLng: number;
 };
 
-const center = { lat: -16.6869, lng: -49.2648 };
+const fallbackCenter = { lat: -16.6869, lng: -49.2648 };
 
 export default function MapView({
   empreendimentos,
   onBoundsChange,
   onPinClick,
+  center = fallbackCenter, // 👈 NOVO (com fallback)
 }: {
   empreendimentos: Empreendimento[];
   onBoundsChange: (b: BoundsLite) => void;
   onPinClick: (slug: string) => void;
+  center?: { lat: number; lng: number }; // 👈 NOVO
 }) {
   const { isLoaded } = useJsApiLoader({
     id: "google-map-script",
@@ -64,7 +66,7 @@ export default function MapView({
   return (
     <GoogleMap
       mapContainerStyle={{ width: "100%", height: "100%" }}
-      center={center}
+      center={center} // 👈 CORRIGIDO
       zoom={13}
       onLoad={handleLoad}
       onIdle={handleIdle}
