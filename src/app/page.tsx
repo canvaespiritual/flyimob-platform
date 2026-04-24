@@ -601,11 +601,29 @@ console.log(
             </div>
           )}
 
-          {/* Aviso (no fim do scroll) */}
-          <div className="mt-6 text-[11px] text-gray-500 leading-relaxed border-t pt-4">
-            <b>IMPORTANTE:</b> Os valores exibidos são referências e podem não estar mais em vigor.
-            O anunciante pode alterar preços, condições e informações a qualquer momento, sem aviso prévio.
-          </div>
+          {/* Aviso + mini rodapé */}
+<div className="mt-6 text-[11px] text-gray-500 leading-relaxed border-t pt-4 space-y-2">
+  
+  <div>
+    <b>IMPORTANTE:</b> Os valores exibidos são referências e podem não estar mais em vigor.
+    O anunciante pode alterar preços, condições e informações a qualquer momento, sem aviso prévio.
+  </div>
+
+  <div className="flex gap-3 text-[11px]">
+    <a href="/politica-de-privacidade" className="underline hover:text-black">
+      Privacidade
+    </a>
+
+    <a href="/termos-de-uso" className="underline hover:text-black">
+      Termos
+    </a>
+  </div>
+
+  <div className="text-[10px] text-gray-400">
+    ATACADÃO IMÓVEIS LTDA • CNPJ 22.846.405/0001-88
+  </div>
+
+</div>
         </div>
       </div>
     </main>

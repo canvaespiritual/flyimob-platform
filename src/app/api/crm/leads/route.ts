@@ -104,9 +104,9 @@ export async function POST(req: NextRequest) {
         origem: body?.origem !== undefined ? originOrNull(body.origem) : null,
 
         interesse: body?.interesse ? String(body.interesse) : null,
-status: body?.status ?? "CONTATO_INICIAL",
-calorVenda: body?.calorVenda !== undefined ? heatOrNull(body.calorVenda) : null,
-contextoGeral,
+        status: body?.status ?? "CONTATO_INICIAL",
+        calorVenda: body?.calorVenda !== undefined ? heatOrNull(body.calorVenda) : null,
+        contextoGeral,
         nextFollowUpAt: body?.nextFollowUpAt !== undefined ? dateOrNull(body.nextFollowUpAt) : null,
       },
     });
