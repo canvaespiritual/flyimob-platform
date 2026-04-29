@@ -11,6 +11,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
       tenantName={s.tenant.name}
       userName={s.user.name}
       userRole={s.user.role}
+      isPlatform={s.tenant.isPlatform}
     >
       {children}
     </AdminShell>

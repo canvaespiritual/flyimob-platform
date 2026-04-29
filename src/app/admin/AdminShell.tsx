@@ -85,19 +85,27 @@ export default function AdminShell({
   tenantName,
   userName,
   userRole,
+  isPlatform,
 }: {
   children: React.ReactNode;
   tenantSlug: string;
   tenantName: string;
   userName: string;
   userRole: UserRole;
+  isPlatform: boolean;
 }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
 
-  const nav = useMemo(() => {
-    return ALL_NAV.filter((i) => !i.perm || hasPermission(userRole, i.perm));
-  }, [userRole]);
+    const nav = useMemo(() => {
+    const base = ALL_NAV.filter((i) => !i.perm || hasPermission(userRole, i.perm));
+
+    if (isPlatform && userRole === "OWNER") {
+      return [{ href: "/admin/operacoes", label: "Operações" }, ...base];
+    }
+
+    return base;
+  }, [userRole, isPlatform]);
 
   return (
     <div className="min-h-screen bg-white">
