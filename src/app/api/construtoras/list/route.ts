@@ -1,14 +1,11 @@
 import { prisma } from "../../../../lib/prisma";
+import { requireUser } from "@/lib/authz.server";
 
-export async function GET(req: Request) {
-  const { searchParams } = new URL(req.url);
-  const tenantSlug = searchParams.get("tenantSlug") || "flyimob";
-
-  const tenant = await prisma.tenant.findUnique({ where: { slug: tenantSlug } });
-  if (!tenant) return Response.json([]);
+export async function GET() {
+  const s = await requireUser();
 
   const list = await prisma.construtora.findMany({
-    where: { tenantId: tenant.id },
+    where: { tenantId: s.tenant.id },
     orderBy: { name: "asc" },
     select: { id: true, name: true, observacao: true },
   });

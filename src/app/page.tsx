@@ -85,7 +85,7 @@ const [mapCenter, setMapCenter] = useState({
   const perPage = 8;
 
   useEffect(() => {
-  fetch("/api/empreendimentos/map?tenantSlug=flyimob")
+  fetch("/api/empreendimentos/map")
     .then((r) => r.json())
     .then((data: EmpreendimentoMap[]) => {
       setEmpreendimentos(data);

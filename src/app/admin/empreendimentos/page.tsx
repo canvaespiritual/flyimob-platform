@@ -1,6 +1,7 @@
 import DeleteButton from "./DeleteButton";
 import Link from "next/link";
 import { prisma } from "../../../lib/prisma";
+import { requireUser } from "@/lib/authz.server";
 
 type SP = { [key: string]: string | string[] | undefined };
 
@@ -11,8 +12,8 @@ export default async function EmpreendimentosPage({
 }) {
   const sp = await Promise.resolve(searchParams);
 
-  const tenant = await prisma.tenant.findUnique({ where: { slug: "flyimob" } });
-  if (!tenant) return <div className="p-6">Tenant flyimob não encontrado.</div>;
+  const s = await requireUser();
+  const tenant = s.tenant;
 
   // =========================
   // Paginação e filtros
@@ -232,7 +233,7 @@ export default async function EmpreendimentosPage({
                   {/* Status */}
                   <form action="/api/empreendimentos/toggle-status" method="POST">
                     <input type="hidden" name="id" value={e.id} />
-                    <input type="hidden" name="tenantSlug" value="flyimob" />
+                    <input type="hidden" name="tenantSlug" value={tenant.slug} />
                     <button className="border rounded px-3 py-2 text-sm hover:bg-gray-50">
                       {e.publicado ? "Inativar" : "Ativar"}
                     </button>
@@ -241,7 +242,7 @@ export default async function EmpreendimentosPage({
                   {/* Excluir */}
                   <form action="/api/empreendimentos/delete" method="POST">
                     <input type="hidden" name="id" value={e.id} />
-                    <input type="hidden" name="tenantSlug" value="flyimob" />
+                    <input type="hidden" name="tenantSlug" value={tenant.slug} />
                     <DeleteButton />
                   </form>
                 </div>

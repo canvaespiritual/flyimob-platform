@@ -36,7 +36,14 @@ export default async function EmpreendimentoPublicPage({
   if (!tenant) return <div className="p-6">Tenant não encontrado.</div>;
 
   const emp = await prisma.empreendimento.findFirst({
-    where: { tenantId: tenant.id, slug, publicado: true },
+    where: {
+  slug,
+  publicado: true,
+  tenant: {
+    isPlatform: false,
+    parent: { isPlatform: true },
+  },
+},
     select: {
       id: true,
       name: true,

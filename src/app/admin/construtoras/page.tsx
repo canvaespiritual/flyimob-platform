@@ -1,6 +1,7 @@
 import { prisma } from "../../../lib/prisma";
 import Link from "next/link";
 import ConfirmDeleteButton from "../../../components/ConfirmDeleteButton";
+import { requireUser } from "@/lib/authz.server";
 
 type SP = { [key: string]: string | string[] | undefined };
 
@@ -11,8 +12,8 @@ export default async function ConstrutorasPage({
 }) {
   const sp = await Promise.resolve(searchParams);
 
-  const tenant = await prisma.tenant.findUnique({ where: { slug: "flyimob" } });
-  if (!tenant) return <div className="p-6">Tenant flyimob não encontrado.</div>;
+  const s = await requireUser();
+  const tenant = s.tenant;
 
   const returnTo = typeof sp?.returnTo === "string" ? sp.returnTo : null;
 
@@ -39,7 +40,7 @@ export default async function ConstrutorasPage({
         <div>
           <h1 className="text-2xl font-semibold">Construtoras</h1>
           <div className="text-sm text-gray-500">
-            Cadastre, edite e gerencie as construtoras do tenant <b>flyimob</b>.
+            Cadastre, edite e gerencie as construtoras do tenant <b>{tenant.slug}</b>.
           </div>
         </div>
 
@@ -60,7 +61,7 @@ export default async function ConstrutorasPage({
           method="post"
           className="space-y-3"
         >
-          <input type="hidden" name="tenantSlug" value="flyimob" />
+          <input type="hidden" name="tenantSlug" value={tenant.slug} />
           {returnTo && <input type="hidden" name="returnTo" value={returnTo} />}
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -193,7 +194,7 @@ export default async function ConstrutorasPage({
 
   {c._count.empreendimentos === 0 && (
     <form>
-      <input type="hidden" name="tenantSlug" value="flyimob" />
+      <input type="hidden" name="tenantSlug" value={tenant.slug} />
       <input type="hidden" name="id" value={c.id} />
       <ConfirmDeleteButton
         formAction="/api/construtoras/delete"

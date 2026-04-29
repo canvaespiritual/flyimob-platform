@@ -44,3 +44,17 @@ gustavo_poc@hotmail.com
 
 Operação Brasília: Crailgra272  ou pareceida.. 
 gustavopradoc@gmail.com
+
+
+🔌 Dados para conectar no SQL Shell
+🧾 Configuração
+Host (Server):
+turntable.proxy.rlwy.net
+Porta (Port):
+34738
+Database (Banco):
+railway
+Usuário (User):
+postgres
+Senha (Password):
+yPtbfvmfCtMfWJjtmhNpHHRuqRVixJbu

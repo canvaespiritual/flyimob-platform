@@ -2,18 +2,22 @@ import { prisma } from "../../../../lib/prisma";
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
-  const tenantSlug = searchParams.get("tenantSlug") || "flyimob";
+  const tenantSlug = searchParams.get("tenantSlug");
 
-  const tenant = await prisma.tenant.findUnique({ where: { slug: tenantSlug } });
-  if (!tenant) return Response.json([]);
+const tenantWhere = tenantSlug
+  ? { slug: tenantSlug }
+  : {
+      isPlatform: false,
+      parent: { isPlatform: true },
+    };
 
   const empreendimentos = await prisma.empreendimento.findMany({
     where: {
-      tenantId: tenant.id,
-      status: "ATIVO",
-      lat: { not: null },
-      lng: { not: null },
-    },
+  tenant: tenantWhere,
+  status: "ATIVO",
+  lat: { not: null },
+  lng: { not: null },
+},
     orderBy: { createdAt: "desc" },
     select: {
       id: true,
