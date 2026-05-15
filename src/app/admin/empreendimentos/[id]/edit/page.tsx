@@ -3,14 +3,15 @@ import EmpreendimentoGeocode from "../../empreendimentoGeocode";
 import Link from "next/link";
 import { prisma } from "../../../../../lib/prisma";
 import EmpreendimentoWizardNav from "../../../../../components/empreendimentos/EmpreendimentoWizardNav";
+import { requireUser } from "@/lib/authz.server";
 
 export default async function EditEmpreendimentoPage(
   { params }: { params: { id: string } | Promise<{ id: string }> }
 ) {
   const { id } = await Promise.resolve(params);
 
-  const tenant = await prisma.tenant.findUnique({ where: { slug: "flyimob" } });
-  if (!tenant) return <div className="p-6">Tenant flyimob não encontrado.</div>;
+  const s = await requireUser();
+  const tenant = s.tenant;
 
   const construtoras = await prisma.construtora.findMany({
     where: { tenantId: tenant.id },
@@ -89,7 +90,7 @@ export default async function EditEmpreendimentoPage(
         method="post"
         className="space-y-4"
       >
-        <input type="hidden" name="tenantSlug" value="flyimob" />
+        <input type="hidden" name="tenantSlug" value={tenant.slug} />
         <input type="hidden" name="id" value={empreendimento.id} />
 
         <div className="space-y-2">

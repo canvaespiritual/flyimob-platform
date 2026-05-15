@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { prisma } from "../../../../../lib/prisma";
 import EmpreendimentoWizardNav from "../../../../../components/empreendimentos/EmpreendimentoWizardNav";
+import { requireUser } from "@/lib/authz.server";
 
 export default async function CadastroEmpreendimentoHubPage({
   params,
@@ -9,8 +10,8 @@ export default async function CadastroEmpreendimentoHubPage({
 }) {
   const { id } = await Promise.resolve(params);
 
-  const tenant = await prisma.tenant.findUnique({ where: { slug: "flyimob" } });
-  if (!tenant) return <div className="p-6">Tenant flyimob não encontrado.</div>;
+  const s = await requireUser();
+  const tenant = s.tenant;
 
   const emp = await prisma.empreendimento.findFirst({
     where: { id, tenantId: tenant.id },

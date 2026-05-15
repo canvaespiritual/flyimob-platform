@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { prisma } from "../../../../../lib/prisma";
 import ConfirmDeleteButton from "../../../../../components/ConfirmDeleteButton";
+import { requireUser } from "@/lib/authz.server";
 
 export default async function EditConstrutoraPage({
   params,
@@ -9,8 +10,8 @@ export default async function EditConstrutoraPage({
 }) {
   const { id } = await Promise.resolve(params);
 
-  const tenant = await prisma.tenant.findUnique({ where: { slug: "flyimob" } });
-  if (!tenant) return <div className="p-6">Tenant flyimob não encontrado.</div>;
+  const s = await requireUser();
+  const tenant = s.tenant;
 
   const construtora = await prisma.construtora.findFirst({
     where: { id, tenantId: tenant.id },
@@ -59,7 +60,7 @@ export default async function EditConstrutoraPage({
           method="post"
           className="space-y-3"
         >
-          <input type="hidden" name="tenantSlug" value="flyimob" />
+          <input type="hidden" name="tenantSlug" value={tenant.slug} />
           <input type="hidden" name="id" value={construtora.id} />
 
           <div className="space-y-1">

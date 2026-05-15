@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { prisma } from "../../../../../../../lib/prisma";
 import EmpreendimentoWizardNav from "../../../../../../../components/empreendimentos/EmpreendimentoWizardNav";
+import { requireUser } from "@/lib/authz.server";
 
 function toDateInput(d: Date | null) {
   return d ? d.toISOString().slice(0, 10) : "";
@@ -13,8 +14,8 @@ export default async function EditTipologiaPage({
 }) {
   const { id, tipologiaId } = await Promise.resolve(params);
 
-  const tenant = await prisma.tenant.findUnique({ where: { slug: "flyimob" } });
-  if (!tenant) return <div className="p-6">Tenant flyimob não encontrado.</div>;
+  const s = await requireUser();
+  const tenant = s.tenant;
 
   const empreendimento = await prisma.empreendimento.findFirst({
     where: { id, tenantId: tenant.id },
@@ -66,7 +67,7 @@ export default async function EditTipologiaPage({
 
       <div className="border rounded p-4">
         <form action="/api/tipologias/update" method="post" className="space-y-3">
-          <input type="hidden" name="tenantSlug" value="flyimob" />
+          <input type="hidden" name="tenantSlug" value={tenant.slug} />
           <input type="hidden" name="empreendimentoId" value={empreendimento.id} />
           <input type="hidden" name="tipologiaId" value={tipologia.id} />
 
@@ -187,7 +188,7 @@ export default async function EditTipologiaPage({
             <button className="border rounded px-4 py-2 hover:bg-gray-50">Salvar alterações</button>
 
             <form action="/api/tipologias/delete" method="post">
-              <input type="hidden" name="tenantSlug" value="flyimob" />
+              <input type="hidden" name="tenantSlug" value={tenant.slug} />
               <input type="hidden" name="empreendimentoId" value={empreendimento.id} />
               <input type="hidden" name="tipologiaId" value={tipologia.id} />
               <button className="border rounded px-4 py-2 hover:bg-gray-50">

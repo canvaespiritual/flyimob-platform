@@ -3,12 +3,12 @@ import EmpreendimentoGeocode from "../empreendimentoGeocode";
 
 
 import { prisma } from "../../../../lib/prisma";
-
+import { requireUser } from "@/lib/authz.server";
 
 
 export default async function NovoEmpreendimentoPage() {
-  const tenant = await prisma.tenant.findUnique({ where: { slug: "flyimob" } });
-  if (!tenant) return <div className="p-6">Tenant não encontrado.</div>;
+ const s = await requireUser();
+const tenant = s.tenant;
 
   const construtoras = await prisma.construtora.findMany({
     where: { tenantId: tenant.id },
@@ -35,7 +35,7 @@ export default async function NovoEmpreendimentoPage() {
       <h1 className="text-2xl font-semibold mb-4">Novo Empreendimento</h1>
 
       <form action="/api/empreendimentos/create" method="post" className="space-y-4">
-        <input type="hidden" name="tenantSlug" value="flyimob" />
+        <input type="hidden" name="tenantSlug" value={tenant.slug} />
 
         {/* Obrigatórios */}
         <div className="space-y-2">
@@ -77,10 +77,9 @@ export default async function NovoEmpreendimentoPage() {
 
         {/* Relacionamentos */}
       <ConstrutoraSelectWithModal
-  tenantSlug="flyimob"
+  tenantSlug={tenant.slug}
   initialConstrutoras={construtoras}
 />
-
 
 
         {/* Campos opcionais (não engessar) */}

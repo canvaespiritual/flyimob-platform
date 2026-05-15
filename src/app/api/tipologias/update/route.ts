@@ -25,7 +25,11 @@ function toText(v: FormDataEntryValue | null) {
 export async function POST(req: Request) {
   const form = await req.formData();
 
-  const tenantSlug = String(form.get("tenantSlug") || "flyimob");
+  const tenantSlug = String(form.get("tenantSlug") || "").trim();
+
+if (!tenantSlug) {
+  return new Response("Tenant obrigatório", { status: 400 });
+}
   const empreendimentoId = String(form.get("empreendimentoId") || "").trim();
   const tipologiaId = String(form.get("tipologiaId") || "").trim();
 

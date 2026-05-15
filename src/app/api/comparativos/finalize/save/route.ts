@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "../../../../../lib/prisma";
+import { requireUser } from "@/lib/authz.server";
 
 export async function POST(req: Request) {
   try {
@@ -9,8 +10,8 @@ export async function POST(req: Request) {
 
     if (!id) return NextResponse.json({ ok: false, error: "id é obrigatório" }, { status: 400 });
 
-    const tenant = await prisma.tenant.findUnique({ where: { slug: "flyimob" } });
-    if (!tenant) return NextResponse.json({ ok: false, error: "Tenant flyimob não encontrado" }, { status: 404 });
+    const s = await requireUser();
+    const tenant = s.tenant;
 
     const updated = await prisma.comparativo.updateMany({
       where: { id, tenantId: tenant.id },

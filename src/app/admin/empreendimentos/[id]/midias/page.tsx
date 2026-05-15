@@ -1,12 +1,13 @@
 import Link from "next/link";
 import { prisma } from "../../../../../lib/prisma";
 import MidiasClient from "./midiasClient";
+import { requireUser } from "@/lib/authz.server";
 
 export default async function MidiasPage({ params }: { params: { id: string } | Promise<{ id: string }> }) {
   const { id } = await Promise.resolve(params);
 
-  const tenant = await prisma.tenant.findUnique({ where: { slug: "flyimob" } });
-  if (!tenant) return <div className="p-6">Tenant não encontrado.</div>;
+  const s = await requireUser();
+  const tenant = s.tenant;
 
   const empreendimento = await prisma.empreendimento.findFirst({
     where: { id, tenantId: tenant.id },
@@ -45,7 +46,7 @@ export default async function MidiasPage({ params }: { params: { id: string } | 
       </div>
 
       <MidiasClient
-        tenantSlug="flyimob"
+        tenantSlug={tenant.slug}
         empreendimentoId={empreendimento.id}
         fotos={fotos}
         anexos={anexos}

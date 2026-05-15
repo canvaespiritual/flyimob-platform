@@ -4,12 +4,24 @@ import { NextResponse } from "next/server";
 export async function POST(req: Request) {
   const form = await req.formData();
   const id = String(form.get("id") || "");
-  const tenantSlug = String(form.get("tenantSlug") || "flyimob");
+  const tenantSlug = String(form.get("tenantSlug") || "").trim();
 
   if (!id) return new Response("ID obrigatório", { status: 400 });
 
   const tenant = await prisma.tenant.findUnique({ where: { slug: tenantSlug } });
   if (!tenant) return new Response("Tenant não encontrado", { status: 404 });
+
+  const empreendimento = await prisma.empreendimento.findFirst({
+  where: {
+    id,
+    tenantId: tenant.id,
+  },
+  select: { id: true },
+});
+
+if (!empreendimento) {
+  return new Response("Empreendimento não encontrado", { status: 404 });
+}
 
   await prisma.$transaction(async (tx) => {
     await tx.empreendimentoTipologia.deleteMany({ where: { empreendimentoId: id } });

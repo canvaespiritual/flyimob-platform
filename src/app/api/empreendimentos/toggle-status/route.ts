@@ -4,7 +4,7 @@ import { NextResponse } from "next/server";
 export async function POST(req: Request) {
   const form = await req.formData();
   const id = String(form.get("id") || "");
-  const tenantSlug = String(form.get("tenantSlug") || "flyimob");
+  const tenantSlug = String(form.get("tenantSlug") || "").trim();
 
   if (!id) return new Response("ID obrigatório", { status: 400 });
 

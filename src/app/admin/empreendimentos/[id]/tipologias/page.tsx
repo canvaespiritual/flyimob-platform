@@ -1,14 +1,15 @@
 import Link from "next/link";
 import { prisma } from "../../../../../lib/prisma";
 import EmpreendimentoWizardNav from "../../../../../components/empreendimentos/EmpreendimentoWizardNav";
+import { requireUser } from "@/lib/authz.server";
 
 export default async function TipologiasPage(
   { params }: { params: { id: string } | Promise<{ id: string }> }
 ) {
   const { id } = await Promise.resolve(params);
 
-  const tenant = await prisma.tenant.findUnique({ where: { slug: "flyimob" } });
-  if (!tenant) return <div className="p-6">Tenant flyimob não encontrado.</div>;
+  const s = await requireUser();
+  const tenant = s.tenant;
 
   const empreendimento = await prisma.empreendimento.findFirst({
     where: { id, tenantId: tenant.id },
@@ -74,7 +75,7 @@ export default async function TipologiasPage(
         <h2 className="font-semibold mb-3">Adicionar tipologia</h2>
 
         <form action="/api/tipologias/create" method="post" className="space-y-3">
-          <input type="hidden" name="tenantSlug" value="flyimob" />
+          <input type="hidden" name="tenantSlug" value={tenant.slug} />
           <input type="hidden" name="empreendimentoId" value={empreendimento.id} />
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -273,7 +274,7 @@ export default async function TipologiasPage(
           </Link>
 
           <form action="/api/tipologias/delete" method="post">
-            <input type="hidden" name="tenantSlug" value="flyimob" />
+            <input type="hidden" name="tenantSlug" value={tenant.slug} />
             <input type="hidden" name="empreendimentoId" value={empreendimento.id} />
             <input type="hidden" name="tipologiaId" value={t.id} />
             <button className="border rounded px-3 py-1 text-sm hover:bg-gray-50">

@@ -17,7 +17,7 @@ const cidade = form.get("cidade") ? String(form.get("cidade")) : null;
 const uf = form.get("uf") ? String(form.get("uf")) : null;
 const cep = form.get("cep") ? String(form.get("cep")) : null;
 
-  const tenantSlug = String(form.get("tenantSlug") || "flyimob").trim();
+  const tenantSlug = String(form.get("tenantSlug") || "").trim();
   const id = String(form.get("id") || "").trim();
 
   if (!id) return new Response("ID obrigatório", { status: 400 });

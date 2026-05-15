@@ -3,7 +3,10 @@ import { prisma } from "../../../../lib/prisma";
 export async function POST(req: Request) {
   const body = await req.json().catch(() => ({}));
 
-  const tenantSlug = String(body.tenantSlug || "flyimob");
+  const tenantSlug = String(body.tenantSlug || "").trim();
+  if (!tenantSlug) {
+  return new Response("Tenant obrigatório", { status: 400 });
+}
   const name = String(body.name || "").trim();
 
   if (!name) {

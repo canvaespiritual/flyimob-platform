@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "../../../../lib/prisma";
+import { requireUser } from "@/lib/authz.server";
 
 function str(v: any) {
   return String(v ?? "").trim();
@@ -23,13 +24,8 @@ export async function POST(req: Request) {
       );
     }
 
-    const tenant = await prisma.tenant.findUnique({ where: { slug: "flyimob" } });
-    if (!tenant) {
-      return NextResponse.json(
-        { ok: false, error: "Tenant flyimob não encontrado." },
-        { status: 404 }
-      );
-    }
+    const s = await requireUser();
+    const tenant = s.tenant;
 
     await prisma.comparativo.update({
       where: { id },

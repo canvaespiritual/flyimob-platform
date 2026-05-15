@@ -10,7 +10,7 @@ function txt(form: FormData, key: string) {
 export async function POST(req: Request) {
   const form = await req.formData();
 
-  const tenantSlug = String(form.get("tenantSlug") || "flyimob");
+  const tenantSlug = String(form.get("tenantSlug") || "").trim();
   const id = String(form.get("id") || "").trim();
   const name = String(form.get("name") || "").trim();
 

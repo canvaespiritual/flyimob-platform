@@ -10,7 +10,11 @@ function txt(form: FormData, key: string) {
 export async function POST(req: Request) {
   const form = await req.formData();
 
-  const tenantSlug = String(form.get("tenantSlug") || "flyimob");
+  const tenantSlug = String(form.get("tenantSlug") || "").trim();
+
+if (!tenantSlug) {
+  return new Response("Tenant obrigatório", { status: 400 });
+}
   const tenant = await prisma.tenant.findUnique({ where: { slug: tenantSlug } });
   if (!tenant) return new Response("Tenant não encontrado", { status: 404 });
 
