@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { prisma } from "../../../lib/prisma";
 import PhotoGallery from "./PhotoGallery";
@@ -24,6 +25,104 @@ function calcPrecoM2(preco?: number | null, area?: number | null) {
   return Math.round(preco / area);
 }
 
+function absoluteUrl(url?: string | null) {
+  if (!url) return null;
+  if (url.startsWith("http://") || url.startsWith("https://")) return url;
+  return `https://flyimob.com${url.startsWith("/") ? url : `/${url}`}`;
+}
+
+export async function generateMetadata({
+  params,
+}: {
+  params: { slug: string } | Promise<{ slug: string }>;
+}): Promise<Metadata> {
+  const { slug } = await Promise.resolve(params);
+
+  const emp = await prisma.empreendimento.findFirst({
+    where: {
+      slug,
+      publicado: true,
+      tenant: {
+        isPlatform: false,
+        parent: { isPlatform: true },
+      },
+    },
+    select: {
+      name: true,
+      slug: true,
+      descricao: true,
+      bairro: true,
+      cidade: true,
+      uf: true,
+      fotos: {
+        orderBy: [{ isCover: "desc" }, { ordem: "asc" }],
+        take: 1,
+        select: { urlFull: true, urlThumb: true },
+      },
+      tipologias: {
+        orderBy: [{ precoInicial: "asc" }, { createdAt: "desc" }],
+        take: 1,
+        select: {
+          quartos: true,
+          areaPrivativa: true,
+          precoInicial: true,
+        },
+      },
+    },
+  });
+
+  if (!emp) {
+    return {
+      title: "Empreendimento não encontrado | Flyimob",
+      description: "Empreendimento não encontrado ou não publicado.",
+    };
+  }
+
+  const tipologia = emp.tipologias[0];
+  const imageUrl = absoluteUrl(emp.fotos[0]?.urlFull || emp.fotos[0]?.urlThumb);
+  const pageUrl = `https://flyimob.com/empreendimentos/${emp.slug}`;
+
+  const detalhes = [
+    tipologia?.quartos ? `${tipologia.quartos} quarto${tipologia.quartos > 1 ? "s" : ""}` : null,
+    tipologia?.areaPrivativa ? `${tipologia.areaPrivativa} m²` : null,
+    tipologia?.precoInicial ? `a partir de R$ ${tipologia.precoInicial.toLocaleString("pt-BR")}` : null,
+    emp.bairro || emp.cidade ? `${emp.bairro || ""}${emp.cidade ? `, ${emp.cidade}` : ""}${emp.uf ? `/${emp.uf}` : ""}` : null,
+  ].filter(Boolean);
+
+  const description =
+    detalhes.length > 0
+      ? `${detalhes.join(" • ")}. Veja fotos, detalhes e condições.`
+      : emp.descricao?.slice(0, 160) || "Veja fotos, detalhes e condições deste empreendimento.";
+
+  return {
+    title: `${emp.name} | Flyimob`,
+    description,
+    openGraph: {
+      title: `${emp.name} | Flyimob`,
+      description,
+      url: pageUrl,
+      siteName: "Flyimob",
+      type: "website",
+      images: imageUrl
+        ? [
+            {
+              url: imageUrl,
+              width: 1200,
+              height: 630,
+              alt: emp.name,
+            },
+          ]
+        : [],
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: `${emp.name} | Flyimob`,
+      description,
+      images: imageUrl ? [imageUrl] : [],
+    },
+  };
+}
+
 export default async function EmpreendimentoPublicPage({
   params,
 }: {
@@ -32,8 +131,7 @@ export default async function EmpreendimentoPublicPage({
   const { slug } = await Promise.resolve(params);
 
   // MVP: tenant fixo (como você vem fazendo). Depois dá pra trocar por domínio/subdomínio.
-  const tenant = await prisma.tenant.findUnique({ where: { slug: "flyimob" } });
-  if (!tenant) return <div className="p-6">Tenant não encontrado.</div>;
+ 
 
   const emp = await prisma.empreendimento.findFirst({
     where: {
@@ -88,10 +186,7 @@ export default async function EmpreendimentoPublicPage({
         },
       },
 
-      anexos: {
-        orderBy: [{ ordem: "asc" }, { createdAt: "desc" }],
-        select: { id: true, tipo: true, titulo: true, url: true },
-      },
+      
 
       construtora: { select: { name: true, website: true } },
     },
@@ -261,24 +356,7 @@ export default async function EmpreendimentoPublicPage({
             )}
           </div>
 
-          {/* Anexos */}
-          <div className="border rounded p-4">
-            <div className="font-semibold mb-2">Arquivos / Anexos</div>
-            {emp.anexos.length === 0 ? (
-              <div className="text-sm text-gray-500">Nenhum anexo.</div>
-            ) : (
-              <ul className="space-y-2">
-                {emp.anexos.map((a) => (
-                  <li key={a.id} className="flex items-center justify-between gap-3">
-                    <a href={a.url} target="_blank" rel="noreferrer" className="text-sm text-blue-600 underline">
-                      {a.titulo || a.tipo}
-                    </a>
-                    <span className="text-xs text-gray-500">{a.tipo}</span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
+          
         </div>
 
         {/* Sidebar */}
