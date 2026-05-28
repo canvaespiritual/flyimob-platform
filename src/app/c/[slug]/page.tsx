@@ -68,7 +68,11 @@ export async function generateMetadata(
     "Veja as opções iniciais separadas para seu perfil e finalize sua pré-análise para liberar parcelas, entrada e cenários personalizados.";
 
   const url = `${SITE_URL}/c/${comparativo.slugPublico}`;
- const config = comparativo.configExibicao as any;
+ const config =
+  typeof comparativo.configExibicao === "string"
+    ? JSON.parse(comparativo.configExibicao)
+    : comparativo.configExibicao ?? {};
+
 
 const image = config?.ogImageUrl
   ? absoluteUrl(config.ogImageUrl)
@@ -112,7 +116,7 @@ export default async function PublicComparativoPage(
   }
 
   const comparativo = await getComparativo(slug);
-
+console.log("CONFIG EXIBICAO:", comparativo.configExibicao);
   if (!comparativo) {
     return <div className="p-6">Comparativo não encontrado.</div>;
   }
