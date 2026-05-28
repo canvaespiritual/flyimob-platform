@@ -283,16 +283,8 @@ if (pins.length === 0) return;
           </div>
 
           {/* Logo (ajuste o caminho) */}
-          <img
-            src="/logo.png"
-            alt="Logo"
-            className="h-10 w-auto opacity-90"
-            onError={(e) => {
-              // se não existir logo.png, simplesmente some
-              (e.currentTarget as HTMLImageElement).style.display = "none";
-            }}
-          />
-        </div>
+          <div className="text-sm font-semibold text-gray-700">FlyImob</div>
+        </div>//
 
         <p className="mt-4 text-gray-600 text-sm max-w-3xl">
           Comparação personalizada para facilitar sua decisão, com informações organizadas lado a lado.
@@ -441,12 +433,7 @@ if (pins.length === 0) return;
 
             <div className="mt-4 flex items-center justify-between gap-4">
               <div className="flex items-center gap-3">
-                <img
-                  src="/logo.png"
-                  alt="Logo"
-                  className="h-8 w-auto opacity-90"
-                  onError={(e) => ((e.currentTarget as HTMLImageElement).style.display = "none")}
-                />
+                <div className="text-sm font-semibold text-gray-700">FlyImob</div>
                 <div className="text-gray-500">
                   FlyImob • Todos os direitos reservados.
                 </div>
