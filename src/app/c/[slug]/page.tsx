@@ -68,7 +68,7 @@ export async function generateMetadata(
     "Veja as opções iniciais separadas para seu perfil e finalize sua pré-análise para liberar parcelas, entrada e cenários personalizados.";
 
   const url = `${SITE_URL}/c/${comparativo.slugPublico}`;
-  const image = `${SITE_URL}/api/comparativos/og/${comparativo.slugPublico}`;
+  const image = `${SITE_URL}/api/comparativos/og/${comparativo.slugPublico}/image.png`;
 
   return {
     title,
