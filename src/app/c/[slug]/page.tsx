@@ -64,19 +64,13 @@ export async function generateMetadata(
   }
 
   const title = "🏠 Sua Pré-Seleção Inicial de Imóveis";
+
   const description =
     "Veja as opções iniciais separadas para seu perfil e finalize sua pré-análise para liberar parcelas, entrada e cenários personalizados.";
 
   const url = `${SITE_URL}/c/${comparativo.slugPublico}`;
- const config =
-  typeof comparativo.configExibicao === "string"
-    ? JSON.parse(comparativo.configExibicao)
-    : comparativo.configExibicao ?? {};
 
-
-  const image = config?.ogImageUrl
-  ? absoluteUrl(config.ogImageUrl)
-  : pickOgImage(comparativo);
+  const image = `${SITE_URL}/og/comparativo-default.png`;
 
   return {
     title,
