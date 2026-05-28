@@ -74,7 +74,7 @@ export async function generateMetadata(
     : comparativo.configExibicao ?? {};
 
 
-const image = config?.ogImageUrl
+  const image = config?.ogImageUrl
   ? absoluteUrl(config.ogImageUrl)
   : pickOgImage(comparativo);
 
@@ -116,10 +116,10 @@ export default async function PublicComparativoPage(
   }
 
   const comparativo = await getComparativo(slug);
-console.log("CONFIG EXIBICAO:", comparativo.configExibicao);
+  
   if (!comparativo) {
     return <div className="p-6">Comparativo não encontrado.</div>;
   }
-
+console.log("CONFIG EXIBICAO:", comparativo.configExibicao);
   return <ComparativoPublicClient comparativo={comparativo} />;
 }
