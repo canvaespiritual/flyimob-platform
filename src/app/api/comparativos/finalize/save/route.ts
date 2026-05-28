@@ -1,155 +1,38 @@
 import { NextResponse } from "next/server";
 import { PutObjectCommand } from "@aws-sdk/client-s3";
-import sharp from "sharp";
 import { prisma } from "../../../../../lib/prisma";
 import { requireUser } from "@/lib/authz.server";
 import { s3, S3_BUCKET, S3_REGION } from "../../../../../lib/s3";
 
 export const runtime = "nodejs";
 
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://flyimob.com";
+
 function publicUrl(key: string) {
   return `https://${S3_BUCKET}.s3.${S3_REGION}.amazonaws.com/${key}`;
 }
 
-function esc(s: string) {
-  return String(s || "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
-}
+async function generateAndUploadOgImage(slugPublico: string, comparativoId: string) {
+  const ogUrl = `${SITE_URL}/api/comparativos/og/${slugPublico}/image.png`;
 
-async function fetchImageBuffer(url?: string | null) {
-  if (!url) return null;
-  try {
-    const res = await fetch(url);
-    if (!res.ok) return null;
-    return Buffer.from(await res.arrayBuffer());
-  } catch {
-    return null;
-  }
-}
-
-function pickCover(fotos: any[]) {
-  if (!Array.isArray(fotos) || fotos.length === 0) return null;
-  const cover = fotos.find((f) => f.isCover);
-  return cover?.urlFull ?? fotos[0]?.urlFull ?? fotos[0]?.urlThumb ?? null;
-}
-
-async function generateOgImage(comparativo: any) {
-  const width = 1200;
-  const height = 630;
-
-  const rawItems = (comparativo.items || []).slice(0, 3);
-
-  const items = rawItems.map((item: any) => {
-    const emp = item.tipologia?.empreendimento;
-    return {
-      name: emp?.name || "Empreendimento",
-      bairro: emp?.bairro || "",
-      cidade: emp?.cidade || "",
-      imageUrl: pickCover(emp?.fotos || []),
-    };
+  const res = await fetch(ogUrl, {
+    cache: "no-store",
   });
 
-  const count = Math.max(1, items.length);
-  const colWidth = Math.floor(width / count);
-
-  const composites: sharp.OverlayOptions[] = [];
-
-  for (let i = 0; i < count; i++) {
-    const imgBuffer = await fetchImageBuffer(items[i]?.imageUrl);
-
-    let finalImg: Buffer;
-
-    if (imgBuffer) {
-      finalImg = await sharp(imgBuffer)
-        .resize(colWidth, height, { fit: "cover" })
-        .jpeg({ quality: 86 })
-        .toBuffer();
-    } else {
-      finalImg = await sharp({
-        create: {
-          width: colWidth,
-          height,
-          channels: 3,
-          background: "#0b141a",
-        },
-      })
-        .jpeg({ quality: 86 })
-        .toBuffer();
-    }
-
-    composites.push({
-      input: finalImg,
-      left: i * colWidth,
-      top: 0,
-    });
+  if (!res.ok) {
+    throw new Error(`Falha ao gerar OG dinâmica: ${res.status}`);
   }
 
-  const namesSvg = items
-    .map((item: any, i: number) => {
-      const x = i * colWidth + 34;
-      const y = 462;
-      const local = [item.bairro, item.cidade].filter(Boolean).join(" • ");
+  const buffer = Buffer.from(await res.arrayBuffer());
 
-      return `
-        <text x="${x}" y="${y}" font-size="25" fill="rgba(255,255,255,0.85)">Opção ${i + 1}</text>
-        <text x="${x}" y="${y + 42}" font-size="38" font-weight="800" fill="white">${esc(item.name)}</text>
-        <text x="${x}" y="${y + 78}" font-size="24" fill="rgba(255,255,255,0.9)">${esc(local)}</text>
-      `;
-    })
-    .join("");
-
-  const overlaySvg = `
-  <svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
-    <rect width="${width}" height="${height}" fill="rgba(0,0,0,0.18)"/>
-
-    <rect x="0" y="0" width="${width}" height="210" fill="rgba(5,18,20,0.82)"/>
-
-    <text x="60" y="82" font-size="48" font-weight="800" fill="white">
-      Pre-selecao Inicial de Imoveis
-    </text>
-
-    <text x="60" y="132" font-size="30" fill="rgba(255,255,255,0.92)">
-      Opcoes separadas para seu perfil
-    </text>
-
-    <text x="60" y="178" font-size="28" fill="#7CFFF2">
-      Finalize no WhatsApp para liberar parcelas e condicoes
-    </text>
-
-    <rect x="1010" y="36" width="132" height="46" rx="23" fill="rgba(255,255,255,0.12)"/>
-    <text x="1033" y="67" font-size="25" fill="white">FlyImob</text>
-  </svg>
-`;
-
-  const finalBuffer = await sharp({
-    create: {
-      width,
-      height,
-      channels: 3,
-      background: "#071516",
-    },
-  })
-    .composite([
-      ...composites,
-      {
-        input: Buffer.from(overlaySvg),
-        left: 0,
-        top: 0,
-      },
-    ])
-    .jpeg({ quality: 90, mozjpeg: true })
-    .toBuffer();
-
-  const key = `public/comparativos/${comparativo.id}/og/${comparativo.slugPublico}-${Date.now()}.jpg`;
+  const key = `public/comparativos/${comparativoId}/og/${slugPublico}-${Date.now()}.png`;
 
   await s3.send(
     new PutObjectCommand({
       Bucket: S3_BUCKET,
       Key: key,
-      Body: finalBuffer,
-      ContentType: "image/jpeg",
+      Body: buffer,
+      ContentType: "image/png",
       CacheControl: "public, max-age=31536000, immutable",
     })
   );
@@ -172,22 +55,9 @@ export async function POST(req: Request) {
 
     const comparativo = await prisma.comparativo.findFirst({
       where: { id, tenantId: tenant.id },
-      include: {
-        items: {
-          orderBy: { ordem: "asc" },
-          take: 3,
-          include: {
-            tipologia: {
-              include: {
-                empreendimento: {
-                  include: {
-                    fotos: { orderBy: { ordem: "asc" } },
-                  },
-                },
-              },
-            },
-          },
-        },
+      select: {
+        id: true,
+        slugPublico: true,
       },
     });
 
@@ -198,9 +68,12 @@ export async function POST(req: Request) {
     let ogImageUrl: string | null = null;
 
     try {
-      ogImageUrl = await generateOgImage(comparativo);
+      ogImageUrl = await generateAndUploadOgImage(
+        comparativo.slugPublico,
+        comparativo.id
+      );
     } catch (err) {
-      console.error("Erro ao gerar OG image do comparativo:", err);
+      console.error("Erro ao gerar/upload OG image do comparativo:", err);
     }
 
     const nextConfigExibicao = {
@@ -223,6 +96,9 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true, ogImageUrl });
   } catch (e) {
     console.error("finalize/save error:", e);
-    return NextResponse.json({ ok: false, error: "Erro ao salvar finalização" }, { status: 500 });
+    return NextResponse.json(
+      { ok: false, error: "Erro ao salvar finalização" },
+      { status: 500 }
+    );
   }
 }
