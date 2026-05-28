@@ -21,9 +21,7 @@ export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const slug = (searchParams.get("slug") || "").trim();
 
-  if (!slug) {
-    return new Response("slug obrigatório", { status: 400 });
-  }
+  if (!slug) return new Response("slug obrigatório", { status: 400 });
 
   const comparativo = await prisma.comparativo.findUnique({
     where: { slugPublico: slug },
@@ -73,13 +71,14 @@ export async function GET(req: Request) {
     (
       <div
         style={{
-          width: "1200px",
-          height: "630px",
+          width: 1200,
+          height: 630,
           display: "flex",
+          position: "relative",
           background: "#071516",
           color: "white",
           fontFamily: "Arial",
-          position: "relative",
+          overflow: "hidden",
         }}
       >
         <div
@@ -87,26 +86,29 @@ export async function GET(req: Request) {
             position: "absolute",
             inset: 0,
             display: "flex",
-            opacity: 0.9,
+            flexDirection: "row",
           }}
         >
           {items.map((item, index) => (
             <div
               key={index}
               style={{
-                width: "400px",
-                height: "630px",
+                width: 400,
+                height: 630,
                 display: "flex",
                 position: "relative",
                 overflow: "hidden",
-                borderRight: index < 2 ? "4px solid rgba(255,255,255,0.25)" : "none",
+                borderRight:
+                  index < 2 ? "4px solid rgba(255,255,255,0.25)" : "none",
               }}
             >
               <img
                 src={item.image}
+                width="400"
+                height="630"
                 style={{
-                  width: "400px",
-                  height: "630px",
+                  width: 400,
+                  height: 630,
                   objectFit: "cover",
                 }}
               />
@@ -115,8 +117,9 @@ export async function GET(req: Request) {
                 style={{
                   position: "absolute",
                   inset: 0,
+                  display: "flex",
                   background:
-                    "linear-gradient(to top, rgba(0,0,0,0.82), rgba(0,0,0,0.18), rgba(0,0,0,0.08))",
+                    "linear-gradient(to top, rgba(0,0,0,0.85), rgba(0,0,0,0.20), rgba(0,0,0,0.10))",
                 }}
               />
 
@@ -130,11 +133,29 @@ export async function GET(req: Request) {
                   flexDirection: "column",
                 }}
               >
-                <div style={{ fontSize: 22, opacity: 0.9 }}>Opção {index + 1}</div>
-                <div style={{ fontSize: 34, fontWeight: 800, lineHeight: 1.1 }}>
+                <div style={{ display: "flex", fontSize: 22, opacity: 0.9 }}>
+                  Opção {index + 1}
+                </div>
+
+                <div
+                  style={{
+                    display: "flex",
+                    fontSize: 34,
+                    fontWeight: 800,
+                    lineHeight: 1.1,
+                  }}
+                >
                   {item.name}
                 </div>
-                <div style={{ fontSize: 22, marginTop: 8, opacity: 0.9 }}>
+
+                <div
+                  style={{
+                    display: "flex",
+                    fontSize: 22,
+                    marginTop: 8,
+                    opacity: 0.9,
+                  }}
+                >
                   {item.bairro}
                   {item.cidade ? ` • ${item.cidade}` : ""}
                 </div>
@@ -150,19 +171,42 @@ export async function GET(req: Request) {
             top: 54,
             display: "flex",
             flexDirection: "column",
-            background: "rgba(0,0,0,0.62)",
+            background: "rgba(0,0,0,0.64)",
             padding: "28px 34px",
             borderRadius: 28,
             border: "2px solid rgba(255,255,255,0.25)",
           }}
         >
-          <div style={{ fontSize: 54, fontWeight: 900, lineHeight: 1.05 }}>
+          <div
+            style={{
+              display: "flex",
+              fontSize: 54,
+              fontWeight: 900,
+              lineHeight: 1.05,
+            }}
+          >
             Pré-Seleção Inicial
           </div>
-          <div style={{ fontSize: 28, marginTop: 12, opacity: 0.95 }}>
+
+          <div
+            style={{
+              display: "flex",
+              fontSize: 28,
+              marginTop: 12,
+              opacity: 0.95,
+            }}
+          >
             3 opções separadas para seu perfil
           </div>
-          <div style={{ fontSize: 24, marginTop: 18, color: "#7CFFF2" }}>
+
+          <div
+            style={{
+              display: "flex",
+              fontSize: 24,
+              marginTop: 18,
+              color: "#7CFFF2",
+            }}
+          >
             Finalize no WhatsApp para liberar parcelas e condições
           </div>
         </div>
@@ -172,6 +216,7 @@ export async function GET(req: Request) {
             position: "absolute",
             right: 46,
             bottom: 34,
+            display: "flex",
             fontSize: 24,
             background: "rgba(0,0,0,0.58)",
             padding: "14px 22px",
