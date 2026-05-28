@@ -101,22 +101,27 @@ async function generateOgImage(comparativo: any) {
     .join("");
 
   const overlaySvg = `
-    <svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
-      <rect width="${width}" height="${height}" fill="rgba(0,0,0,0.22)"/>
+  <svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
+    <rect width="${width}" height="${height}" fill="rgba(0,0,0,0.18)"/>
 
-      <rect x="0" y="355" width="${width}" height="275" fill="rgba(0,0,0,0.45)"/>
+    <rect x="0" y="0" width="${width}" height="210" fill="rgba(5,18,20,0.82)"/>
 
-      <rect x="64" y="56" width="720" height="178" rx="28" fill="rgba(0,0,0,0.62)"/>
-      <text x="94" y="127" font-size="58" font-weight="900" fill="white">Pré-Seleção Inicial</text>
-      <text x="94" y="174" font-size="31" fill="rgba(255,255,255,0.95)">${count} ${count === 1 ? "opção separada" : "opções separadas"} para seu perfil</text>
-      <text x="94" y="218" font-size="26" fill="#7CFFF2">Finalize no WhatsApp para liberar parcelas e condições</text>
+    <text x="60" y="82" font-size="48" font-weight="800" fill="white">
+      Pre-selecao Inicial de Imoveis
+    </text>
 
-      ${namesSvg}
+    <text x="60" y="132" font-size="30" fill="rgba(255,255,255,0.92)">
+      Opcoes separadas para seu perfil
+    </text>
 
-      <rect x="1010" y="548" width="142" height="44" rx="22" fill="rgba(0,0,0,0.58)"/>
-      <text x="1032" y="579" font-size="25" fill="white">FlyImob</text>
-    </svg>
-  `;
+    <text x="60" y="178" font-size="28" fill="#7CFFF2">
+      Finalize no WhatsApp para liberar parcelas e condicoes
+    </text>
+
+    <rect x="1010" y="36" width="132" height="46" rx="23" fill="rgba(255,255,255,0.12)"/>
+    <text x="1033" y="67" font-size="25" fill="white">FlyImob</text>
+  </svg>
+`;
 
   const finalBuffer = await sharp({
     create: {
