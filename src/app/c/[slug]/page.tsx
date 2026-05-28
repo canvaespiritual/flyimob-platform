@@ -70,7 +70,7 @@ export async function generateMetadata(
 
   const url = `${SITE_URL}/c/${comparativo.slugPublico}`;
 
-  const image = `${SITE_URL}/og/comparativo-default.png`;
+  const image = `${SITE_URL}/og/comparativo-v2.png`;
 
   return {
     title,
@@ -114,6 +114,5 @@ export default async function PublicComparativoPage(
   if (!comparativo) {
     return <div className="p-6">Comparativo não encontrado.</div>;
   }
-console.log("CONFIG EXIBICAO:", comparativo.configExibicao);
   return <ComparativoPublicClient comparativo={comparativo} />;
 }
