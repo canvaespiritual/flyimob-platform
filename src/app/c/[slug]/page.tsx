@@ -70,7 +70,7 @@ export async function generateMetadata(
 
   const url = `${SITE_URL}/c/${comparativo.slugPublico}`;
 
-  const image = `${SITE_URL}/og/comparativo-v2.png`;
+const image = `${SITE_URL}/og/comparativo-v3.jpg`;
 
   return {
     title,
