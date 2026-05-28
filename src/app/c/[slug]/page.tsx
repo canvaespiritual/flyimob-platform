@@ -69,9 +69,12 @@ export async function generateMetadata(
 
   const url = `${SITE_URL}/c/${comparativo.slugPublico}`;
   const config = comparativo.configExibicao as any;
+
+const dynamicOgImage = `${SITE_URL}/api/comparativos/og/${comparativo.slugPublico}/image.png`;
+
 const image = config?.ogImageUrl
   ? absoluteUrl(config.ogImageUrl)
-  : pickOgImage(comparativo);
+  : dynamicOgImage;
 
   return {
     title,
