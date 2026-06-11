@@ -6,7 +6,7 @@ const VIDEO_ID = '6a2ac830c7a04b5a3db0ea11';
 const VTURB_SCRIPT =
   'https://scripts.converteai.net/ab0d5dbd-353e-4147-a5c6-52ab96121828/players/6a2ac830c7a04b5a3db0ea11/v4/player.js';
 
-const REVEAL_AT_SECONDS = 1702; // 28min22s
+const REVEAL_AT_SECONDS = 1880; // 28min22s
 
 const WHATSAPP_NUMBER = '5562982498504';
 const WHATSAPP_MESSAGE = 'PONTE';
