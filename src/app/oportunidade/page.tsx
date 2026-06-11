@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 
 const VIDEO_ID = '6a2ac830c7a04b5a3db0ea11';
 const VTURB_SCRIPT =
@@ -12,15 +12,18 @@ const WHATSAPP_NUMBER = '5562982498504';
 const WHATSAPP_MESSAGE = 'PONTE';
 
 export default function OportunidadePage() {
-  const [showCta, setShowCta] = useState(false);
-
   useEffect(() => {
     const storageKey = `vturb_progress_${VIDEO_ID}`;
+
+    function revealCta() {
+      const cta = document.getElementById('ctaBox');
+      if (cta) cta.classList.remove('hidden');
+    }
 
     const savedProgress = Number(localStorage.getItem(storageKey) || 0);
 
     if (savedProgress >= REVEAL_AT_SECONDS) {
-      setShowCta(true);
+      revealCta();
     }
 
     const scriptAlreadyExists = document.querySelector(
@@ -67,7 +70,7 @@ export default function OportunidadePage() {
           localStorage.setItem(storageKey, String(Math.floor(seconds)));
 
           if (seconds >= REVEAL_AT_SECONDS) {
-            setShowCta(true);
+            revealCta();
           }
         }
       } catch {}
@@ -83,7 +86,7 @@ export default function OportunidadePage() {
           Number(localStorage.getItem(storageKey) || 0) >= REVEAL_AT_SECONDS;
 
         if (alreadyUnlocked) {
-          setShowCta(true);
+          revealCta();
           clearInterval(interval);
           return;
         }
@@ -92,7 +95,7 @@ export default function OportunidadePage() {
         localStorage.setItem(storageKey, String(elapsed));
 
         if (elapsed >= REVEAL_AT_SECONDS) {
-          setShowCta(true);
+          revealCta();
           clearInterval(interval);
         }
       }, 1000);
@@ -115,14 +118,6 @@ export default function OportunidadePage() {
           Goiânia
         </div>
 
-        <h1 className="mb-4 text-3xl font-extrabold leading-tight md:text-5xl">
-          
-        </h1>
-
-        <p className="mb-7 max-w-2xl text-base leading-relaxed text-slate-300 md:text-lg">
-         
-        </p>
-
         <div className="w-full overflow-hidden rounded-2xl bg-black shadow-2xl">
           <div className="relative w-full pt-[177.7777%]">
             <div
@@ -139,20 +134,16 @@ export default function OportunidadePage() {
           </div>
         </div>
 
-        {showCta ? (
+        <div id="ctaBox" className="hidden">
           <a
             href={whatsappUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="mt-8 rounded-full bg-green-500 px-8 py-4 text-base font-extrabold text-white shadow-xl transition hover:bg-green-400 md:text-lg"
+            className="mt-8 inline-block rounded-full bg-green-500 px-8 py-4 text-base font-extrabold text-white shadow-xl transition hover:bg-green-400 md:text-lg"
           >
             QUERO CONHECER A OPORTUNIDADE
           </a>
-        ) : (
-          <p className="mt-5 text-sm text-slate-400">
-            
-          </p>
-        )}
+        </div>
 
         <p className="mt-8 text-xs text-slate-500">
           Flyimob • Expansão imobiliária
