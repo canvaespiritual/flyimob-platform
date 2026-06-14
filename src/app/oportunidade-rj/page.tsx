@@ -23,7 +23,7 @@ const REVEAL_AT_SECONDS = 1880;
 const WATCH_MARKS = [30, 90, 180, 360, 600, 900, 1200, REVEAL_AT_SECONDS];
 
 const WHATSAPP_NUMBER = '5521971592969';
-const WHATSAPP_MESSAGE = '[RH-GO] SENHA: PONTE';
+const WHATSAPP_MESSAGE = '[RH-RJ] SENHA: PONTE';
 
 export default function OportunidadePage() {
   useEffect(() => {
