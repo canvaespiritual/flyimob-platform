@@ -15,8 +15,8 @@ const VTURB_SCRIPT =
 
 const META_PIXEL_ID = '2054561458829978';
 
-const CITY = 'goiania';
-const CAMPAIGN_REF = 'RH-GO';
+const CITY = 'rio_de_janeiro';
+const CAMPAIGN_REF = 'RH-RJ';
 const FUNNEL = 'recrutamento';
 const REVEAL_AT_SECONDS = 1880;
 
@@ -71,7 +71,7 @@ export default function OportunidadePage() {
       fbq('init', META_PIXEL_ID);
       fbq('track', 'PageView');
       fbq('track', 'ViewContent', {
-        content_name: 'VSL Recrutamento Goiânia',
+        content_name: 'VSL Recrutamento Rio de Janeiro',
         content_category: 'rh_recrutamento',
         city: CITY,
         ref: CAMPAIGN_REF,
@@ -217,7 +217,7 @@ export default function OportunidadePage() {
   function handleWhatsappClick() {
     if (typeof window !== 'undefined' && typeof window.fbq === 'function') {
       window.fbq('track', 'Lead', {
-        content_name: 'Clique WhatsApp - Recrutamento Goiânia',
+        content_name: 'Clique WhatsApp - Recrutamento Rio de Janeiro',
         content_category: 'rh_recrutamento',
         city: CITY,
         ref: CAMPAIGN_REF,
@@ -231,7 +231,7 @@ export default function OportunidadePage() {
     <main className="min-h-screen bg-[#07111f] text-white">
       <section className="mx-auto flex max-w-3xl flex-col items-center px-4 py-8 text-center">
         <div className="mb-4 rounded-full border border-blue-400/30 bg-blue-500/10 px-4 py-2 text-sm font-semibold text-blue-100">
-          Goiânia
+          Rio de Janeiro
         </div>
 
         <div className="w-full overflow-hidden rounded-2xl bg-black shadow-2xl">
