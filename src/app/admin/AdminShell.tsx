@@ -100,11 +100,31 @@ export default function AdminShell({
     const nav = useMemo(() => {
     const base = ALL_NAV.filter((i) => !i.perm || hasPermission(userRole, i.perm));
 
-    if (isPlatform && userRole === "OWNER") {
-      return [{ href: "/admin/operacoes", label: "Operações" }, ...base];
-    }
+   if (isPlatform && userRole === "OWNER") {
+  return [
+    {
+      href: "/admin/operacoes",
+      label: "Operações",
+    },
+    ...base,
+  ];
+}
 
-    return base;
+if (
+  !isPlatform &&
+  (userRole === "OWNER" ||
+    userRole === "DIRECTOR")
+) {
+  return [
+    ...base,
+    {
+      href: "/admin/financeiro",
+      label: "Financeiro",
+    },
+  ];
+}
+
+return base;
   }, [userRole, isPlatform]);
 
   return (

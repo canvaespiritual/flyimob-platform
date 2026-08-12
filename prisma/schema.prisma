@@ -66,12 +66,216 @@ enum LeadOrigin {
   LISTA
   ACAO_EXTERNA
 }
+
 enum LeadHeat {
   FRIO
   MORNO
   QUENTE
   MUITO_QUENTE
 }
+
+/////////////////////////////////////////////////////////
+// 🔽🔽🔽  ENUMS DO MÓDULO FINANCEIRO  🔽🔽🔽
+/////////////////////////////////////////////////////////
+
+enum FinancialSaleStatus {
+  OPEN
+  PARTIAL
+  RESOLVED
+  CANCELLED
+}
+
+enum FinancialCommissionInputMode {
+  MANUAL_AMOUNT
+  VGV_PERCENT
+  VGV_PERCENT_OVERRIDE
+}
+
+enum FinancialStageType {
+  ATO
+  BANCO
+  PREMIO
+  COMPLEMENTO
+  OUTRO
+}
+
+enum FinancialStageStatus {
+  EXPECTED
+  INVOICED
+  AWAITING_RECEIPT
+  PARTIALLY_RECEIVED
+  RECEIVED
+  RESOLVED
+  CANCELLED
+}
+
+enum FinancialInvoiceStatus {
+  DRAFT
+  ISSUED
+  CANCELLED
+}
+
+enum FinancialReceiptStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+}
+
+enum FinancialTaxKind {
+  WITHHELD_AT_SOURCE
+  PAYABLE_BY_COMPANY
+  OTHER
+}
+
+enum FinancialTaxStatus {
+  PENDING
+  PROVISIONED
+  SEPARATED
+  PAID
+  WITHHELD
+  CANCELLED
+}
+
+enum FinancialParticipantRole {
+  BROKER
+  MANAGER
+  FILE_OPERATOR
+  MARKETING
+  INDICATOR
+  CLOSER
+  INCORPORATOR
+  BONUS
+  OTHER
+}
+
+enum FinancialCalculationBasis {
+  COMMISSION_GROSS
+  COMMISSION_NET_AFTER_WITHHOLDING
+  COMMISSION_NET_AFTER_ALL_TAXES
+  VGV
+  FIXED
+  MANUAL
+}
+
+enum FinancialEntitlementStatus {
+  OPEN
+  PARTIAL
+  PAID
+  CANCELLED
+}
+
+enum FinancialAdjustmentType {
+  ADVANCE
+  DISCOUNT
+  BONUS
+  REIMBURSEMENT
+  OTHER
+}
+
+enum FinancialAdjustmentEffect {
+  CREDIT
+  DEBIT
+}
+
+enum FinancialAdjustmentStatus {
+  AVAILABLE
+  PARTIAL
+  APPLIED
+  CANCELLED
+}
+
+enum FinancialPaymentStatus {
+  PENDING
+  SCHEDULED
+  PAID
+  CANCELLED
+}
+
+enum FinancialAccountType {
+  CHECKING
+  TAX_RESERVE
+  CASH
+  OTHER
+}
+
+enum FinancialCompanyAllocationStatus {
+  PENDING
+  APPROPRIATED
+  CANCELLED
+}
+
+enum FinancialTaxClosingStatus {
+  OPEN
+  CLOSED
+  SEPARATED
+  PAID
+  CANCELLED
+}
+
+enum FinancialTaxMovementType {
+  SEPARATION
+  PAYMENT
+  ADJUSTMENT
+}
+
+enum FinancialSettlementStatus {
+  DRAFT
+  FINALIZED
+  CANCELLED
+}
+
+enum FinancialSettlementItemType {
+  ENTITLEMENT
+  ADJUSTMENT
+  PAYMENT
+}
+
+enum FinancialDocumentType {
+  PARTICIPANT_STATEMENT
+  PAYMENT_RECEIPT
+  TAX_CLOSING
+  OTHER
+}
+
+enum FinancialAttachmentType {
+  INVOICE
+  BUILDER_RECEIPT
+  PARTICIPANT_PAYMENT
+  ADVANCE
+  TAX_DOCUMENT
+  TAX_PAYMENT
+  CONTRACT
+  OTHER
+}
+
+enum FinancialAttachmentEntityType {
+  SALE
+  STAGE
+  INVOICE
+  RECEIPT
+  PARTICIPANT
+  ENTITLEMENT
+  ADJUSTMENT
+  PAYMENT
+  TAX_ENTRY
+  TAX_CLOSING
+  TAX_MOVEMENT
+  SETTLEMENT
+  DOCUMENT
+  COMPANY_ALLOCATION
+}
+
+enum FinancialAuditAction {
+  CREATE
+  UPDATE
+  DELETE
+  STATUS_CHANGE
+  FINALIZE
+  UPLOAD
+  GENERATE_DOCUMENT
+  OTHER
+}
+
 model Tenant {
   id        String     @id @default(cuid())
   name      String
@@ -92,6 +296,17 @@ model Tenant {
   inviteTokens    UserInviteToken[]
   invites         Invite[]          @relation("TenantInvites")
   crmleads        CRMLead[]
+
+  // =========================
+  // FINANCEIRO
+  // =========================
+  financialSales        FinancialSale[]
+  financialParticipants FinancialParticipant[]
+  financialAccounts     FinancialAccount[]
+  financialTaxRules     FinancialTaxRule[]
+  financialTaxClosings  FinancialTaxClosing[]
+  financialSettlements  FinancialSettlement[]
+  financialDocuments    FinancialDocument[]
 }
 
 model User {
@@ -122,6 +337,8 @@ model User {
 
   inviteTokensSent UserInviteToken[] @relation("InviteTokensSent")
   crmLeads         CRMLead[]
+
+  financialParticipantProfiles FinancialParticipant[] @relation("FinancialParticipantUser")
 
   @@index([tenantId])
   @@index([supervisorId])
@@ -202,6 +419,7 @@ model Construtora {
 
   tenant          Tenant           @relation(fields: [tenantId], references: [id])
   empreendimentos Empreendimento[]
+  financialSales  FinancialSale[]
 
   @@unique([tenantId, name])
   @@index([tenantId])
@@ -243,9 +461,10 @@ model Empreendimento {
   tenant      Tenant       @relation(fields: [tenantId], references: [id])
   construtora Construtora? @relation(fields: [construtoraId], references: [id])
 
-  fotos      EmpreendimentoFoto[]
-  anexos     EmpreendimentoAnexo[]
-  tipologias EmpreendimentoTipologia[]
+  fotos          EmpreendimentoFoto[]
+  anexos         EmpreendimentoAnexo[]
+  tipologias     EmpreendimentoTipologia[]
+  financialSales FinancialSale[]
 
   @@unique([tenantId, slug])
   @@index([tenantId])
@@ -437,4 +656,970 @@ model CRMLead {
   @@index([tenantId])
   @@index([ownerId])
   @@index([status])
+}
+
+/////////////////////////////////////////////////////////
+// 🔽🔽🔽  MÓDULO FINANCEIRO FLYIMOB  🔽🔽🔽
+/////////////////////////////////////////////////////////
+
+// =====================================================
+// VENDA
+// =====================================================
+
+model FinancialSale {
+  id       String @id @default(cuid())
+  tenantId String
+
+  // Cliente
+  clientName    String
+  clientCpfCnpj String?
+  clientPhone   String?
+  clientEmail   String?
+
+  // Referências opcionais
+  construtoraId            String?
+  empreendimentoId         String?
+  construtoraNameManual    String?
+  empreendimentoNameManual String?
+
+  // Unidade
+  unit  String?
+  block String?
+
+  // Data comercial da venda
+  saleDate DateTime?
+
+  // VGV pode ser preenchido depois
+  vgv Decimal? @db.Decimal(18, 2)
+
+  // Forma como a comissão foi definida
+  commissionInputMode FinancialCommissionInputMode @default(MANUAL_AMOUNT)
+
+  // Ex.: 4% do VGV
+  commissionPercent Decimal? @db.Decimal(10, 6)
+
+  // Valor calculado originalmente pela regra
+  commissionCalculatedAmount Decimal? @db.Decimal(18, 2)
+
+  // Se o usuário sobrescrever o cálculo
+  commissionOverrideAmount Decimal? @db.Decimal(18, 2)
+
+  // Valor final oficial da comissão da venda
+  commissionFinalAmount Decimal? @db.Decimal(18, 2)
+
+  status FinancialSaleStatus @default(OPEN)
+
+  notes String?
+
+  createdById String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant         Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  construtora    Construtora?    @relation(fields: [construtoraId], references: [id], onDelete: SetNull)
+  empreendimento Empreendimento? @relation(fields: [empreendimentoId], references: [id], onDelete: SetNull)
+
+  stages FinancialStage[]
+
+  @@index([tenantId])
+  @@index([tenantId, status])
+  @@index([tenantId, saleDate])
+  @@index([construtoraId])
+  @@index([empreendimentoId])
+}
+
+// =====================================================
+// ETAPAS DA VENDA
+// Ex.: ATO / BANCO / PRÊMIO / COMPLEMENTO
+// =====================================================
+
+model FinancialStage {
+  id       String @id @default(cuid())
+  tenantId String
+  saleId   String
+
+  type  FinancialStageType
+  label String?
+
+  sequence Int @default(0)
+
+  // Ex.: etapa representa 50% da comissão total
+  commissionSharePercent Decimal? @db.Decimal(10, 6)
+
+  // Valor previsto dessa etapa
+  expectedGrossAmount Decimal? @db.Decimal(18, 2)
+
+  // Datas previstas
+  expectedInvoiceDate DateTime?
+  expectedReceiptDate DateTime?
+
+  status FinancialStageStatus @default(EXPECTED)
+
+  resolvedAt DateTime?
+
+  notes String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  sale FinancialSale @relation(fields: [saleId], references: [id], onDelete: Cascade)
+
+  invoices           FinancialInvoice[]
+  receipts           FinancialReceipt[]
+  entitlements       FinancialEntitlement[]
+  companyAllocations FinancialCompanyAllocation[]
+
+  @@unique([saleId, sequence])
+  @@index([tenantId])
+  @@index([saleId])
+  @@index([tenantId, status])
+  @@index([expectedReceiptDate])
+}
+
+// =====================================================
+// NOTAS FISCAIS
+// Uma etapa pode ter uma ou mais notas
+// =====================================================
+
+model FinancialInvoice {
+  id       String @id @default(cuid())
+  tenantId String
+  stageId  String
+
+  number String?
+
+  grossAmount Decimal? @db.Decimal(18, 2)
+
+  issuedAt DateTime?
+
+  // Competência fiscal
+  // Normalmente derivada de issuedAt, mas armazenamos
+  // para facilitar fechamento e permitir ajuste manual.
+  competenceYear  Int?
+  competenceMonth Int?
+
+  status FinancialInvoiceStatus @default(DRAFT)
+
+  notes String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  stage FinancialStage @relation(fields: [stageId], references: [id], onDelete: Cascade)
+
+  taxEntries FinancialTaxEntry[]
+  receipts   FinancialReceipt[]
+
+  @@index([tenantId])
+  @@index([stageId])
+  @@index([issuedAt])
+  @@index([tenantId, competenceYear, competenceMonth])
+  @@index([status])
+}
+
+// =====================================================
+// CONTAS BANCÁRIAS DA PRÓPRIA OPERAÇÃO FLYIMOB
+// =====================================================
+
+model FinancialAccount {
+  id       String @id @default(cuid())
+  tenantId String
+
+  name String
+
+  type FinancialAccountType @default(CHECKING)
+
+  bankName String?
+  agency   String?
+  account  String?
+
+  pixType String?
+  pixKey  String?
+
+  active Boolean @default(true)
+
+  notes String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  receipts           FinancialReceipt[]
+  payments           FinancialPayment[]
+  companyAllocations FinancialCompanyAllocation[]
+  taxClosings        FinancialTaxClosing[]
+  taxMovements       FinancialTaxMovement[]
+
+  @@index([tenantId])
+  @@index([tenantId, active])
+}
+
+// =====================================================
+// RECEBIMENTOS REAIS DA CONSTRUTORA / INCORPORADORA
+//
+// Uma NF/etapa pode ser recebida em mais de uma entrada.
+// =====================================================
+
+model FinancialReceipt {
+  id       String @id @default(cuid())
+  tenantId String
+
+  stageId   String
+  invoiceId String?
+
+  financialAccountId String?
+
+  // Se quisermos cadastrar antes da entrada
+  expectedAmount Decimal?  @db.Decimal(18, 2)
+  expectedAt     DateTime?
+
+  // Valor efetivamente recebido
+  amount Decimal? @db.Decimal(18, 2)
+
+  receivedAt DateTime?
+
+  reference String?
+
+  status FinancialReceiptStatus @default(PENDING)
+
+  notes String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  stage            FinancialStage    @relation(fields: [stageId], references: [id], onDelete: Cascade)
+  invoice          FinancialInvoice? @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+  financialAccount FinancialAccount? @relation(fields: [financialAccountId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId])
+  @@index([stageId])
+  @@index([invoiceId])
+  @@index([receivedAt])
+  @@index([tenantId, status])
+}
+
+// =====================================================
+// REGRAS DE IMPOSTO
+//
+// Ex.: Agosto = 4% a separar
+//      Outubro = 6%
+// =====================================================
+
+model FinancialTaxRule {
+  id       String @id @default(cuid())
+  tenantId String
+
+  name String
+
+  kind FinancialTaxKind
+
+  rate Decimal @db.Decimal(10, 6)
+
+  validFrom DateTime
+  validTo   DateTime?
+
+  active Boolean @default(true)
+
+  notes String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  taxEntries FinancialTaxEntry[]
+
+  @@index([tenantId])
+  @@index([tenantId, active])
+  @@index([validFrom])
+  @@index([validTo])
+}
+
+// =====================================================
+// IMPOSTOS REAIS DE CADA NOTA
+//
+// Se a nota é de agosto, guarda a regra de agosto.
+// Uma alteração futura NÃO modifica o histórico.
+// =====================================================
+
+model FinancialTaxEntry {
+  id       String @id @default(cuid())
+  tenantId String
+
+  invoiceId String
+  taxRuleId String?
+
+  name String
+
+  kind FinancialTaxKind
+
+  // Percentual usado naquela nota
+  rate Decimal? @db.Decimal(10, 6)
+
+  // Valor final usado naquela nota
+  amount Decimal? @db.Decimal(18, 2)
+
+  status FinancialTaxStatus @default(PENDING)
+
+  // Parte que nós mesmos separamos
+  provisionedAt DateTime?
+  separatedAt   DateTime?
+
+  // Pagamento efetivo do tributo
+  paidAt DateTime?
+
+  notes String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  invoice FinancialInvoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  taxRule FinancialTaxRule? @relation(fields: [taxRuleId], references: [id], onDelete: SetNull)
+
+  closingItem FinancialTaxClosingItem?
+
+  @@index([tenantId])
+  @@index([invoiceId])
+  @@index([taxRuleId])
+  @@index([tenantId, kind])
+  @@index([tenantId, status])
+}
+
+// =====================================================
+// PARTICIPANTES FINANCEIROS
+//
+// Pode ser usuário do Flyimob ou pessoa externa.
+// =====================================================
+
+model FinancialParticipant {
+  id       String @id @default(cuid())
+  tenantId String
+
+  userId String?
+
+  name String
+
+  cpfCnpj String?
+
+  email String?
+  phone String?
+
+  // Defaults opcionais para acelerar futuros lançamentos
+  defaultCalculationBasis FinancialCalculationBasis?
+  defaultPercentage       Decimal?                   @db.Decimal(10, 6)
+
+  active Boolean @default(true)
+
+  notes String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user   User?  @relation("FinancialParticipantUser", fields: [userId], references: [id], onDelete: SetNull)
+
+  accounts     FinancialParticipantAccount[]
+  entitlements FinancialEntitlement[]
+  adjustments  FinancialAdjustment[]
+  payments     FinancialPayment[]
+  settlements  FinancialSettlement[]
+  documents    FinancialDocument[]
+
+  @@unique([tenantId, userId])
+  @@index([tenantId])
+  @@index([tenantId, active])
+  @@index([cpfCnpj])
+}
+
+// =====================================================
+// PIX / DADOS BANCÁRIOS DO PARTICIPANTE
+// =====================================================
+
+model FinancialParticipantAccount {
+  id            String @id @default(cuid())
+  participantId String
+
+  pixType String?
+  pixKey  String?
+
+  bankName String?
+  agency   String?
+  account  String?
+
+  accountType String?
+
+  holderName    String?
+  holderCpfCnpj String?
+
+  preferred Boolean @default(false)
+  active    Boolean @default(true)
+
+  notes String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  participant FinancialParticipant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+
+  receivedPayments FinancialPayment[]
+
+  @@index([participantId])
+  @@index([participantId, active])
+}
+
+// =====================================================
+// DIREITO FINANCEIRO / COMISSÃO DO PARTICIPANTE
+//
+// Ex.: corretor tem direito a 40% da etapa.
+// =====================================================
+
+model FinancialEntitlement {
+  id       String @id @default(cuid())
+  tenantId String
+
+  stageId       String
+  participantId String
+
+  role FinancialParticipantRole
+
+  // Usado quando role = OTHER
+  customRoleLabel String?
+
+  calculationBasis FinancialCalculationBasis
+
+  percentage Decimal? @db.Decimal(10, 6)
+
+  // Base usada no momento do cálculo.
+  // Guarda prova histórica do cálculo.
+  calculationBaseAmount Decimal? @db.Decimal(18, 2)
+
+  fixedAmount Decimal? @db.Decimal(18, 2)
+
+  // Resultado da fórmula
+  calculatedAmount Decimal? @db.Decimal(18, 2)
+
+  // Sobrescrição manual, se houver
+  overrideAmount Decimal? @db.Decimal(18, 2)
+
+  // Valor oficial que será liquidado
+  finalAmount Decimal @db.Decimal(18, 2)
+
+  status FinancialEntitlementStatus @default(OPEN)
+
+  notes String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  stage       FinancialStage       @relation(fields: [stageId], references: [id], onDelete: Cascade)
+  participant FinancialParticipant @relation(fields: [participantId], references: [id])
+
+  adjustmentAllocations FinancialAdjustmentAllocation[]
+  paymentAllocations    FinancialPaymentAllocation[]
+  settlementItems       FinancialSettlementItem[]
+
+  @@index([tenantId])
+  @@index([stageId])
+  @@index([participantId])
+  @@index([tenantId, status])
+}
+
+// =====================================================
+// ADIANTAMENTOS / VALES / DESCONTOS / BÔNUS
+//
+// Pode existir ANTES de sabermos em qual venda será usado.
+// A distribuição posterior é feita por
+// FinancialAdjustmentAllocation.
+// =====================================================
+
+model FinancialAdjustment {
+  id       String @id @default(cuid())
+  tenantId String
+
+  participantId String
+
+  type   FinancialAdjustmentType
+  effect FinancialAdjustmentEffect
+
+  amount Decimal @db.Decimal(18, 2)
+
+  occurredAt DateTime
+
+  appliedAt DateTime?
+
+  status FinancialAdjustmentStatus @default(AVAILABLE)
+
+  description String?
+  notes       String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  participant FinancialParticipant @relation(fields: [participantId], references: [id])
+
+  settlementItems FinancialSettlementItem[]
+  allocations     FinancialAdjustmentAllocation[]
+
+  @@index([tenantId])
+  @@index([participantId])
+  @@index([tenantId, status])
+  @@index([occurredAt])
+}
+
+// =====================================================
+// DISTRIBUIÇÃO DE AJUSTES / VALES ENTRE COMISSÕES
+//
+// Exemplo:
+// Vale anterior: R$ 1.000
+// - Venda A: R$ 400
+// - Venda B: R$ 600
+// =====================================================
+
+model FinancialAdjustmentAllocation {
+  id String @id @default(cuid())
+
+  adjustmentId  String
+  entitlementId String
+
+  amount Decimal @db.Decimal(18, 2)
+
+  appliedAt DateTime @default(now())
+
+  createdAt DateTime @default(now())
+
+  adjustment  FinancialAdjustment  @relation(fields: [adjustmentId], references: [id], onDelete: Cascade)
+  entitlement FinancialEntitlement @relation(fields: [entitlementId], references: [id])
+
+  @@unique([adjustmentId, entitlementId])
+  @@index([adjustmentId])
+  @@index([entitlementId])
+}
+
+// =====================================================
+// PAGAMENTO REAL / PIX PARA PARTICIPANTE
+//
+// Um único PIX pode quitar várias vendas/comissões.
+// =====================================================
+
+model FinancialPayment {
+  id       String @id @default(cuid())
+  tenantId String
+
+  participantId String
+
+  sourceAccountId      String?
+  destinationAccountId String?
+
+  amount Decimal @db.Decimal(18, 2)
+
+  scheduledAt DateTime?
+  paidAt      DateTime?
+
+  status FinancialPaymentStatus @default(PENDING)
+
+  // SNAPSHOT DOS DADOS USADOS NO PAGAMENTO.
+  // Mesmo que o participante altere o PIX no futuro,
+  // o pagamento antigo permanece correto.
+  destinationPixType String?
+  destinationPixKey  String?
+
+  destinationBankName String?
+  destinationAgency   String?
+  destinationAccount  String?
+
+  destinationHolderName    String?
+  destinationHolderCpfCnpj String?
+
+  notes String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  participant                   FinancialParticipant         @relation(fields: [participantId], references: [id])
+  sourceAccount                 FinancialAccount?            @relation(fields: [sourceAccountId], references: [id], onDelete: SetNull)
+  destinationParticipantAccount FinancialParticipantAccount? @relation(fields: [destinationAccountId], references: [id], onDelete: SetNull)
+  allocations                   FinancialPaymentAllocation[]
+  settlementItems               FinancialSettlementItem[]
+
+  @@index([tenantId])
+  @@index([participantId])
+  @@index([paidAt])
+  @@index([tenantId, status])
+}
+
+// =====================================================
+// DISTRIBUIÇÃO DE UM PAGAMENTO ENTRE COMISSÕES
+//
+// Exemplo:
+// PIX de R$ 4.000
+// - Venda A: R$ 1.500
+// - Venda B: R$ 1.000
+// - Venda C: R$ 1.500
+// =====================================================
+
+model FinancialPaymentAllocation {
+  id String @id @default(cuid())
+
+  paymentId     String
+  entitlementId String
+
+  amount Decimal @db.Decimal(18, 2)
+
+  createdAt DateTime @default(now())
+
+  payment     FinancialPayment     @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  entitlement FinancialEntitlement @relation(fields: [entitlementId], references: [id])
+
+  @@unique([paymentId, entitlementId])
+  @@index([paymentId])
+  @@index([entitlementId])
+}
+
+// =====================================================
+// LÍQUIDO DA IMOBILIÁRIA
+//
+// O valor disponível é CALCULADO pelo sistema.
+// Esta tabela registra quando esse líquido foi
+// efetivamente apropriado/separado.
+// Pode haver apropriação parcial.
+// =====================================================
+
+model FinancialCompanyAllocation {
+  id       String @id @default(cuid())
+  tenantId String
+
+  stageId String
+
+  financialAccountId String?
+
+  amount Decimal @db.Decimal(18, 2)
+
+  status FinancialCompanyAllocationStatus @default(APPROPRIATED)
+
+  appropriatedAt DateTime?
+
+  notes String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  stage            FinancialStage    @relation(fields: [stageId], references: [id], onDelete: Cascade)
+  financialAccount FinancialAccount? @relation(fields: [financialAccountId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId])
+  @@index([stageId])
+  @@index([appropriatedAt])
+}
+
+// =====================================================
+// FECHAMENTO FISCAL MENSAL
+//
+// Ex.: notas de agosto -> DAS pago em setembro.
+// =====================================================
+
+model FinancialTaxClosing {
+  id       String @id @default(cuid())
+  tenantId String
+
+  competenceYear  Int
+  competenceMonth Int
+
+  status FinancialTaxClosingStatus @default(OPEN)
+
+  // Soma calculada pelos lançamentos fiscais
+  provisionedAmount Decimal? @db.Decimal(18, 2)
+
+  // Quanto efetivamente já foi separado
+  separatedAmount Decimal? @db.Decimal(18, 2)
+
+  // Valor real final do DAS / obrigação
+  actualTaxAmount Decimal? @db.Decimal(18, 2)
+
+  dueDate DateTime?
+
+  closedAt    DateTime?
+  separatedAt DateTime?
+  paidAt      DateTime?
+
+  reserveAccountId String?
+
+  notes String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant         Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  reserveAccount FinancialAccount? @relation(fields: [reserveAccountId], references: [id], onDelete: SetNull)
+
+  items     FinancialTaxClosingItem[]
+  movements FinancialTaxMovement[]
+
+  @@unique([tenantId, competenceYear, competenceMonth])
+  @@index([tenantId])
+  @@index([tenantId, status])
+  @@index([dueDate])
+}
+
+// =====================================================
+// MOVIMENTAÇÕES REAIS DO FECHAMENTO FISCAL
+//
+// Permite várias separações e/ou pagamentos.
+// =====================================================
+
+model FinancialTaxMovement {
+  id       String @id @default(cuid())
+  tenantId String
+
+  closingId String
+
+  type FinancialTaxMovementType
+
+  amount Decimal @db.Decimal(18, 2)
+
+  occurredAt DateTime
+
+  financialAccountId String?
+
+  description String?
+  notes       String?
+
+  createdAt DateTime @default(now())
+
+  closing          FinancialTaxClosing @relation(fields: [closingId], references: [id], onDelete: Cascade)
+  financialAccount FinancialAccount?   @relation(fields: [financialAccountId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId])
+  @@index([closingId])
+  @@index([occurredAt])
+}
+
+// =====================================================
+// ITENS QUE FORMAM O FECHAMENTO DE IMPOSTO
+// =====================================================
+
+model FinancialTaxClosingItem {
+  id String @id @default(cuid())
+
+  closingId  String
+  taxEntryId String
+
+  // Snapshot do valor usado no fechamento
+  amount Decimal @db.Decimal(18, 2)
+
+  createdAt DateTime @default(now())
+
+  closing  FinancialTaxClosing @relation(fields: [closingId], references: [id], onDelete: Cascade)
+  taxEntry FinancialTaxEntry   @relation(fields: [taxEntryId], references: [id])
+
+  @@unique([taxEntryId])
+  @@index([closingId])
+}
+
+// =====================================================
+// FECHAMENTO / DEMONSTRATIVO DE UM PARTICIPANTE
+//
+// Permite fechamento parcial e histórico imutável.
+// =====================================================
+
+model FinancialSettlement {
+  id       String @id @default(cuid())
+  tenantId String
+
+  participantId String
+
+  number String
+
+  periodStart DateTime?
+  periodEnd   DateTime?
+
+  status FinancialSettlementStatus @default(DRAFT)
+
+  grossEntitlementsAmount Decimal? @db.Decimal(18, 2)
+  creditsAmount           Decimal? @db.Decimal(18, 2)
+  debitsAmount            Decimal? @db.Decimal(18, 2)
+  paymentsAmount          Decimal? @db.Decimal(18, 2)
+  netAmount               Decimal? @db.Decimal(18, 2)
+
+  finalizedAt DateTime?
+
+  notes String?
+
+  createdById String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant      Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  participant FinancialParticipant @relation(fields: [participantId], references: [id])
+
+  items     FinancialSettlementItem[]
+  documents FinancialDocument[]
+
+  @@unique([tenantId, number])
+  @@index([tenantId])
+  @@index([participantId])
+  @@index([tenantId, status])
+}
+
+// =====================================================
+// ITENS SELECIONADOS NO FECHAMENTO
+//
+// Também controla o que será mostrado no demonstrativo.
+// =====================================================
+
+model FinancialSettlementItem {
+  id           String @id @default(cuid())
+  settlementId String
+
+  type FinancialSettlementItemType
+
+  entitlementId String?
+  adjustmentId  String?
+  paymentId     String?
+
+  description String?
+
+  amount Decimal @db.Decimal(18, 2)
+
+  displayOrder Int @default(0)
+
+  showInDocument Boolean @default(true)
+
+  createdAt DateTime @default(now())
+
+  settlement  FinancialSettlement   @relation(fields: [settlementId], references: [id], onDelete: Cascade)
+  entitlement FinancialEntitlement? @relation(fields: [entitlementId], references: [id], onDelete: SetNull)
+  adjustment  FinancialAdjustment?  @relation(fields: [adjustmentId], references: [id], onDelete: SetNull)
+  payment     FinancialPayment?     @relation(fields: [paymentId], references: [id], onDelete: SetNull)
+
+  @@index([settlementId])
+  @@index([entitlementId])
+  @@index([adjustmentId])
+  @@index([paymentId])
+}
+
+// =====================================================
+// PDFs / RECIBOS / DEMONSTRATIVOS GERADOS
+//
+// config permite registrar exatamente quais campos
+// foram escolhidos para aparecer naquele PDF.
+// =====================================================
+
+model FinancialDocument {
+  id       String @id @default(cuid())
+  tenantId String
+
+  participantId String?
+  settlementId  String?
+
+  type FinancialDocumentType
+
+  number String?
+
+  title String?
+
+  // Configuração usada no PDF:
+  // cliente, construtora, VGV, descontos, comprovante etc.
+  config Json?
+
+  // Referência genérica opcional.
+  // Ex.: TAX_CLOSING + id do fechamento fiscal
+  referenceType String?
+  referenceId   String?
+
+  url        String?
+  storageKey String?
+
+  originalName String?
+
+  generatedById String?
+
+  generatedAt DateTime @default(now())
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant      Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  participant FinancialParticipant? @relation(fields: [participantId], references: [id], onDelete: SetNull)
+  settlement  FinancialSettlement?  @relation(fields: [settlementId], references: [id], onDelete: SetNull)
+
+  @@unique([tenantId, number])
+  @@index([tenantId])
+  @@index([participantId])
+  @@index([settlementId])
+  @@index([referenceType, referenceId])
+}
+
+// =====================================================
+// ANEXOS FINANCEIROS GENÉRICOS
+//
+// Mantemos genérico de propósito para não precisar
+// criar outra migration sempre que surgir um novo
+// tipo de objeto com comprovante.
+//
+// entityType + entityId indicam a origem.
+// =====================================================
+
+model FinancialAttachment {
+  id       String @id @default(cuid())
+  tenantId String
+
+  entityType FinancialAttachmentEntityType
+  entityId   String
+
+  type FinancialAttachmentType
+
+  title String?
+
+  originalName String
+
+  url String
+
+  // Já deixamos preparado caso no futuro você queira
+  // guardar também a chave do S3.
+  storageKey String?
+
+  mimeType  String?
+  sizeBytes Int?
+
+  uploadedById String?
+
+  createdAt DateTime @default(now())
+
+  @@index([tenantId])
+  @@index([tenantId, entityType, entityId])
+  @@index([type])
+}
+
+// =====================================================
+// AUDITORIA DO FINANCEIRO
+//
+// Não interfere em nenhuma tabela existente.
+// Poderemos preencher progressivamente pelas APIs.
+// =====================================================
+
+model FinancialAuditLog {
+  id       String @id @default(cuid())
+  tenantId String
+
+  entityType String
+  entityId   String
+
+  action FinancialAuditAction
+
+  userId String?
+
+  beforeData Json?
+  afterData  Json?
+
+  note String?
+
+  createdAt DateTime @default(now())
+
+  @@index([tenantId])
+  @@index([tenantId, entityType, entityId])
+  @@index([userId])
+  @@index([createdAt])
 }
