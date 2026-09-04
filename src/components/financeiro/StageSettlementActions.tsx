@@ -78,6 +78,12 @@ export default function StageSettlementActions({
     useState(false);
 
   const [
+    reopeningAllocation,
+    setReopeningAllocation,
+  ] =
+    useState(false);
+
+  const [
     error,
     setError,
   ] =
@@ -268,6 +274,78 @@ export default function StageSettlementActions({
     }
   }
 
+  async function reopenAllocation() {
+    const confirmed =
+      window.confirm(
+        "Reabrir a apropriação desta etapa? A apropriação ativa será cancelada para efeito de cálculo, o histórico será preservado e o saldo será recalculado."
+      );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setReopeningAllocation(
+      true
+    );
+
+    setError(null);
+
+    try {
+      const response =
+        await fetch(
+          "/api/financeiro/apropriacoes/reabrir",
+          {
+            method:
+              "POST",
+
+            headers: {
+              "Content-Type":
+                "application/json",
+            },
+
+            body:
+              JSON.stringify({
+                stageId,
+              }),
+          }
+        );
+
+      const data =
+        await response.json();
+
+      if (
+        !response.ok
+      ) {
+        throw new Error(
+          data?.error ||
+            "Erro ao reabrir apropriação."
+        );
+      }
+
+      setAppropriating(
+        false
+      );
+
+      router.refresh();
+    } catch (
+      err
+    ) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Erro inesperado."
+      );
+    } finally {
+      setReopeningAllocation(
+        false
+      );
+    }
+  }
+
+  const hasExcessAllocation =
+    cashDifference <
+    -0.01;
+
   return (
     <div className="rounded-lg border bg-white">
       <div className="border-b px-4 py-3">
@@ -390,22 +468,30 @@ export default function StageSettlementActions({
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
             <div className="text-xs uppercase text-gray-500">
-              Saldo ainda sem
-              destino
+              {hasExcessAllocation
+                ? "Apropriação excedente"
+                : "Saldo ainda sem destino"}
             </div>
 
             <div
               className={[
                 "mt-1 text-xl font-semibold",
+
                 Math.abs(
                   cashDifference
                 ) <= 0.01
                   ? "text-green-700"
-                  : "text-gray-900",
+                  : hasExcessAllocation
+                    ? "text-red-700"
+                    : "text-gray-900",
               ].join(" ")}
             >
               {formatBRL(
-                cashDifference
+                hasExcessAllocation
+                  ? Math.abs(
+                      cashDifference
+                    )
+                  : cashDifference
               )}
             </div>
           </div>
@@ -426,7 +512,31 @@ export default function StageSettlementActions({
               Flyimob
             </button>
           )}
+
+          {hasExcessAllocation && (
+            <button
+              type="button"
+              disabled={
+                reopeningAllocation
+              }
+              onClick={
+                reopenAllocation
+              }
+              className="rounded-md border border-red-300 bg-red-50 px-3 py-2 text-sm font-medium text-red-700 disabled:opacity-50"
+            >
+              {reopeningAllocation
+                ? "Reabrindo..."
+                : "Revisar apropriação"}
+            </button>
+          )}
         </div>
+
+        {hasExcessAllocation && (
+          <div className="mt-3 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+            O resultado da etapa mudou depois de uma apropriação anterior.
+            Reabra a apropriação para recalcular o saldo e apropriar novamente.
+          </div>
+        )}
 
         {appropriating && (
           <form

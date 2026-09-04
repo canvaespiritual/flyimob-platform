@@ -121,6 +121,34 @@ async function entityExists(
         })
       );
 
+      case "TAX_CLOSING":
+  return Boolean(
+    await prisma.financialTaxClosing.findFirst({
+      where: {
+        id: entityId,
+        tenantId,
+      },
+
+      select: {
+        id: true,
+      },
+    })
+  );
+
+case "TAX_MOVEMENT":
+  return Boolean(
+    await prisma.financialTaxMovement.findFirst({
+      where: {
+        id: entityId,
+        tenantId,
+      },
+
+      select: {
+        id: true,
+      },
+    })
+  );
+
     default:
       return false;
   }
@@ -186,14 +214,16 @@ export async function POST(
       ) as File | null;
 
     const allowedEntities:
-      FinancialAttachmentEntityType[] =
-      [
-        "PAYMENT",
-        "ADJUSTMENT",
-        "INVOICE",
-        "RECEIPT",
-        "TAX_ENTRY",
-      ];
+  FinancialAttachmentEntityType[] =
+  [
+    "PAYMENT",
+    "ADJUSTMENT",
+    "INVOICE",
+    "RECEIPT",
+    "TAX_ENTRY",
+    "TAX_CLOSING",
+    "TAX_MOVEMENT",
+  ];
 
     const allowedTypes:
       FinancialAttachmentType[] =

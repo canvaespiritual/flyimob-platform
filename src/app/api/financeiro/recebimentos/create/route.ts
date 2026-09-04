@@ -10,13 +10,24 @@ import {
   requiredString,
 } from "@/lib/financeiro/validators";
 
-export async function POST(req: Request) {
-  const auth = await getFinanceApiSession();
+export async function POST(
+  req: Request
+) {
+  const auth =
+    await getFinanceApiSession();
 
-  if (!auth.ok) {
+  if (
+    !auth.ok
+  ) {
     return Response.json(
-      { error: auth.error },
-      { status: auth.status }
+      {
+        error:
+          auth.error,
+      },
+      {
+        status:
+          auth.status,
+      }
     );
   }
 
@@ -36,26 +47,51 @@ export async function POST(req: Request) {
     const stage =
       await prisma.financialStage.findFirst({
         where: {
-          id: stageId,
+          id:
+            stageId,
+
           tenantId,
         },
 
         include: {
           receipts: {
             where: {
-              status: "CONFIRMED",
+              status:
+                "CONFIRMED",
+            },
+          },
+
+          invoices: {
+            where: {
+              status:
+                "ISSUED",
+            },
+
+            include: {
+              taxEntries: {
+                where: {
+                  status: {
+                    not:
+                      "CANCELLED",
+                  },
+                },
+              },
             },
           },
         },
       });
 
-    if (!stage) {
+    if (
+      !stage
+    ) {
       return Response.json(
         {
           error:
             "Etapa não encontrada.",
         },
-        { status: 404 }
+        {
+          status: 404,
+        }
       );
     }
 
@@ -75,8 +111,16 @@ export async function POST(req: Request) {
       await prisma.financialReceipt.create({
         data: {
           tenantId,
+
           stageId,
 
+          /*
+           * O valor informado continua sendo
+           * exatamente o valor lançado pelo operador.
+           *
+           * Não alteramos histórico nem fazemos
+           * desconto automático aqui.
+           */
           amount,
 
           receivedAt,
@@ -93,33 +137,97 @@ export async function POST(req: Request) {
 
     const previous =
       stage.receipts.reduce(
-        (sum, item) =>
+        (
+          sum,
+          item
+        ) =>
           sum +
           Number(
-            item.amount || 0
+            item.amount ||
+              0
           ),
         0
       );
 
     const total =
       previous +
-      Number(amount);
-
-    const expected =
       Number(
-        stage.expectedGrossAmount ||
-          0
+        amount
       );
+
+    /*
+     * ==========================================
+     * EXPECTATIVA REAL DE DINHEIRO NA CONTA
+     * ==========================================
+     */
+
+    let invoiceGross =
+      0;
+
+    let withheld =
+      0;
+
+    for (
+      const invoice
+      of stage.invoices
+    ) {
+      invoiceGross +=
+        Number(
+          invoice.grossAmount ||
+            0
+        );
+
+      for (
+        const tax
+        of invoice.taxEntries
+      ) {
+        if (
+          tax.kind ===
+          "WITHHELD_AT_SOURCE"
+        ) {
+          withheld +=
+            Number(
+              tax.amount ||
+                0
+            );
+        }
+      }
+    }
+
+    /*
+     * Se existe NF, a expectativa é:
+     *
+     * NF bruta - retenção na fonte.
+     *
+     * Caso ainda não exista NF, mantemos
+     * expectedGrossAmount como fallback.
+     */
+    const expected =
+      invoiceGross >
+      0
+        ? Math.max(
+            0,
+            invoiceGross -
+              withheld
+          )
+        : Number(
+            stage.expectedGrossAmount ||
+              0
+          );
 
     await prisma.financialStage.update({
       where: {
-        id: stageId,
+        id:
+          stageId,
       },
 
       data: {
         status:
-          expected > 0 &&
-          total < expected
+          expected >
+            0 &&
+          total +
+            0.01 <
+            expected
             ? "PARTIALLY_RECEIVED"
             : "RECEIVED",
       },
@@ -129,13 +237,19 @@ export async function POST(req: Request) {
       ok: true,
       receipt,
     });
-  } catch (error) {
+  } catch (
+    error
+  ) {
     return Response.json(
       {
         error:
-          errorMessage(error),
+          errorMessage(
+            error
+          ),
       },
-      { status: 400 }
+      {
+        status: 400,
+      }
     );
   }
 }

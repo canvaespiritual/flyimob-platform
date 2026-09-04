@@ -20,6 +20,21 @@ type DashboardProps = {
   companyNet: number;
 
   pendingStages: number;
+
+  availableToAppropriate:
+    number;
+
+  invoicedNetReceivable:
+    number;
+
+  futureProjectedNet:
+    number;
+
+  openAdvances:
+    number;
+
+  economicPosition:
+    number;
 };
 
 function Card({
@@ -50,6 +65,68 @@ function Card({
   );
 }
 
+function PositionCard({
+  label,
+  value,
+  description,
+  strong = false,
+}: {
+  label: string;
+  value: number;
+  description: string;
+  strong?: boolean;
+}) {
+  return (
+    <div
+      className={[
+        "rounded-lg border p-4",
+
+        strong
+          ? "bg-gray-900 text-white"
+          : "bg-white",
+      ].join(" ")}
+    >
+      <div
+        className={[
+          "text-xs font-medium uppercase tracking-wide",
+
+          strong
+            ? "text-gray-300"
+            : "text-gray-500",
+        ].join(" ")}
+      >
+        {label}
+      </div>
+
+      <div
+        className={[
+          "mt-2 text-2xl font-semibold",
+
+          strong
+            ? "text-white"
+            : "text-gray-900",
+        ].join(" ")}
+      >
+        {formatBRL(
+          value
+        )}
+      </div>
+
+      <div
+        className={[
+          "mt-1 text-xs",
+
+          strong
+            ? "text-gray-300"
+            : "text-gray-500",
+        ].join(" ")}
+      >
+        {description}
+      </div>
+    </div>
+  );
+}
+
 export default function FinanceiroDashboard({
   totalSales,
   vgv,
@@ -60,9 +137,20 @@ export default function FinanceiroDashboard({
   taxToSeparate,
   companyNet,
   pendingStages,
+
+  availableToAppropriate,
+  invoicedNetReceivable,
+  futureProjectedNet,
+  openAdvances,
+  economicPosition,
 }: DashboardProps) {
   return (
     <div className="space-y-6">
+      {/*
+       * =====================================
+       * VISÃO QUE JÁ EXISTIA
+       * =====================================
+       */}
       <div
         className="
           grid
@@ -74,26 +162,34 @@ export default function FinanceiroDashboard({
       >
         <Card
           label="VGV"
-          value={formatBRL(vgv)}
+          value={formatBRL(
+            vgv
+          )}
           description={`${totalSales} venda(s) cadastrada(s)`}
         />
 
         <Card
           label="Comissão faturada"
-          value={formatBRL(invoiced)}
+          value={formatBRL(
+            invoiced
+          )}
           description="Notas fiscais emitidas"
         />
 
         <Card
           label="Recebido"
-          value={formatBRL(received)}
-          description="Entradas confirmadas"
+          value={formatBRL(
+            received
+          )}
+          description="Valor efetivamente esperado em conta, líquido das retenções"
         />
 
         <Card
           label="A receber"
-          value={formatBRL(receivable)}
-          description="Faturado ainda não recebido"
+          value={formatBRL(
+            receivable
+          )}
+          description="Faturado ainda não recebido, já descontada retenção na fonte"
         />
 
         <Card
@@ -114,15 +210,88 @@ export default function FinanceiroDashboard({
 
         <Card
           label="Líquido Flyimob"
-          value={formatBRL(companyNet)}
-          description="Resultado apropriado"
+          value={formatBRL(
+            companyNet
+          )}
+          description="Resultado já apropriado"
         />
 
         <Card
           label="Pendências"
-          value={String(pendingStages)}
+          value={String(
+            pendingStages
+          )}
           description="Etapas ainda não resolvidas"
         />
+      </div>
+
+      {/*
+       * =====================================
+       * NOVA POSIÇÃO FINANCEIRA
+       * =====================================
+       */}
+      <div className="rounded-lg border bg-gray-50 p-4">
+        <div>
+          <h2 className="font-semibold text-gray-900">
+            Posição financeira Flyimob
+          </h2>
+
+          <p className="mt-1 text-sm text-gray-500">
+            Onde está o resultado econômico da operação hoje e o que ainda está por vir.
+          </p>
+        </div>
+
+        <div
+          className="
+            mt-4
+            grid
+            grid-cols-1
+            gap-3
+            sm:grid-cols-2
+            xl:grid-cols-5
+          "
+        >
+          <PositionCard
+            label="Líquido disponível"
+            value={
+              availableToAppropriate
+            }
+            description="Já entrou e ainda não foi apropriado"
+          />
+
+          <PositionCard
+            label="Líquido faturado a receber"
+            value={
+              invoicedNetReceivable
+            }
+            description="Sua parte líquida das NFs ainda não recebidas"
+          />
+
+          <PositionCard
+            label="Líquido futuro projetado"
+            value={
+              futureProjectedNet
+            }
+            description="Etapas previstas que ainda não possuem NF"
+          />
+
+          <PositionCard
+            label="Créditos em vales"
+            value={
+              openAdvances
+            }
+            description="Saldo ainda devido pelos participantes"
+          />
+
+          <PositionCard
+            label="Posição econômica"
+            value={
+              economicPosition
+            }
+            description="Disponível + faturado + futuro + vales"
+            strong
+          />
+        </div>
       </div>
 
       <div className="rounded-lg border bg-white">
