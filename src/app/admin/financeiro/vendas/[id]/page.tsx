@@ -1,6 +1,7 @@
 ﻿import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import AddSaleStage from "@/components/financeiro/AddSaleStage";
 import FinanceiroNav from "@/components/financeiro/FinanceiroNav";
 import SaleOverview from "@/components/financeiro/SaleOverview";
 import StageCard from "@/components/financeiro/StageCard";
@@ -208,6 +209,8 @@ export default async function VendaFinanceiraPage({
             : null
         }
       />
+
+      <AddSaleStage saleId={sale.id} />
 
       <div className="space-y-6">
         {sale.stages.map(
