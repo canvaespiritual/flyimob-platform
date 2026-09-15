@@ -10,6 +10,8 @@ import { bearerToken, isOpaqueToken, isSessionExpired, newOpaqueToken, tokenHash
 import { academyError, assertCollectorOrigin, readLimitedJson } from "../../src/lib/academy/http.server";
 import { buildCorretorAcademyCheckoutUrl, CORRETOR_ACADEMY } from "../../src/lib/academy/config";
 import { normalizeEmail, normalizeName, normalizePhone } from "../../src/lib/academy/normalization";
+import { HOTMART_STATUS_BY_EVENT, isHotmartPayload } from "../../src/lib/academy/hotmart.server";
+import { POST as hotmartPost } from "../../src/app/api/academy/webhooks/hotmart/route";
 
 const now = new Date("2026-09-15T12:00:30.000Z");
 const range = {
@@ -305,4 +307,23 @@ test("lead normalization is stable and phone retains only digits", () => {
   fails(() => normalizeName("A"));
   fails(() => normalizeEmail("invalid"));
   fails(() => normalizePhone("123"));
+});
+
+test("Hotmart 2.0 payload and configured event mapping are strict", () => {
+  const payload = { id: "evt-1", creation_date: Date.now(), event: "PURCHASE_APPROVED", version: "2.0.0", data: { product: { id: "C13699064X" }, buyer: {}, purchase: { transaction: "HP-1" } } };
+  assert.equal(isHotmartPayload(payload), true);
+  assert.equal(HOTMART_STATUS_BY_EVENT.PURCHASE_APPROVED, "APPROVED");
+  assert.equal(HOTMART_STATUS_BY_EVENT.PURCHASE_BILLET_PRINTED, "PENDING");
+  assert.equal(isHotmartPayload({ ...payload, version: "1.0.0" }), false);
+});
+
+test("Hotmart webhook rejects invalid Hottok before payload processing", async () => {
+  const previous = process.env.HOTMART_HOTTOK;
+  process.env.HOTMART_HOTTOK = "test-secret";
+  try {
+    const response = await hotmartPost(new Request("https://flyimob.com/api/academy/webhooks/hotmart", { method: "POST", headers: { "content-type": "application/json", "x-hotmart-hottok": "wrong" }, body: "{}" }));
+    assert.equal(response.status, 401);
+  } finally {
+    if (previous === undefined) delete process.env.HOTMART_HOTTOK; else process.env.HOTMART_HOTTOK = previous;
+  }
 });
