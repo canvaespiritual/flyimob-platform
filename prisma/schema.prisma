@@ -1623,3 +1623,234 @@ model FinancialAuditLog {
   @@index([userId])
   @@index([createdAt])
 }
+
+// Academy is owned by Flyimob, independently of real-estate tenants.
+enum AcademyEventType {
+  PLAYER_READY
+  PLAY
+  PAUSE
+  PROGRESS
+  SEEK
+  ENDED
+  PITCH_REACHED
+  CHECKOUT_OPEN
+  CHECKOUT_CLICK
+}
+
+enum AcademySaleProvider {
+  HOTMART
+}
+
+enum AcademySaleStatus {
+  PENDING
+  APPROVED
+  COMPLETED
+  CANCELLED
+  EXPIRED
+  REFUNDED
+  CHARGEBACK
+}
+
+enum AcademyWebhookProcessingStatus {
+  RECEIVED
+  PROCESSED
+  DUPLICATE
+  REJECTED
+  FAILED
+}
+
+model AcademyVisitor {
+  id                String   @id @default(cuid())
+  identityTokenHash String   @unique @db.Char(64)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  lastSeenAt        DateTime @default(now())
+
+  sessions AcademySession[]
+
+  @@index([lastSeenAt])
+}
+
+model AcademySession {
+  id                 String   @id @default(cuid())
+  visitorId          String
+  collectorTokenHash String   @unique @db.Char(64)
+  funnelKey          String   @db.VarChar(80)
+  vslKey             String?  @db.VarChar(80)
+  videoId            String?  @db.VarChar(200)
+  startedAt          DateTime @default(now())
+  lastActivityAt     DateTime @default(now())
+  expiresAt          DateTime
+
+  source      String? @db.VarChar(200)
+  utmSource   String? @db.VarChar(200)
+  utmMedium   String? @db.VarChar(200)
+  utmCampaign String? @db.VarChar(200)
+  utmContent  String? @db.VarChar(200)
+  utmTerm     String? @db.VarChar(200)
+  utmId       String? @db.VarChar(200)
+  fbclid      String? @db.VarChar(500)
+  fbp         String? @db.VarChar(256)
+  fbc         String? @db.VarChar(512)
+  gclid       String? @db.VarChar(500)
+  wbraid      String? @db.VarChar(500)
+  gbraid      String? @db.VarChar(500)
+  campaignId  String? @db.VarChar(120)
+  adsetId     String? @db.VarChar(120)
+  adId        String? @db.VarChar(120)
+  landingPage String? @db.VarChar(2048)
+  referrer    String? @db.VarChar(2048)
+
+  currentSecond        Float     @default(0)
+  maxReachedSecond     Float     @default(0)
+  watchedSeconds       Float     @default(0)
+  uniqueWatchedSeconds Float     @default(0)
+  lastPositionSequence Int       @default(-1)
+  playStartedAt        DateTime?
+  pitchReachedAt       DateTime?
+  checkoutOpenedAt     DateTime?
+  checkoutClickedAt    DateTime?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  visitor     AcademyVisitor      @relation(fields: [visitorId], references: [id], onDelete: Restrict)
+  events      AcademyEvent[]
+  watchRanges AcademyWatchRange[]
+  leads       AcademyLead[]
+  sales       AcademySale[]
+
+  @@index([visitorId, lastActivityAt])
+  @@index([funnelKey, startedAt])
+  @@index([expiresAt])
+}
+
+model AcademyEvent {
+  id             String           @id @default(cuid())
+  sessionId      String
+  eventKey       String           @db.VarChar(80)
+  sequence       Int
+  type           AcademyEventType
+  clientAt       DateTime
+  receivedAt     DateTime         @default(now())
+  positionSecond Float?
+  metadata       Json
+  payloadHash    String           @db.Char(64)
+
+  session     AcademySession      @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  watchRanges AcademyWatchRange[]
+
+  @@unique([sessionId, eventKey])
+  @@unique([sessionId, sequence])
+  @@index([sessionId, receivedAt])
+}
+
+model AcademyWatchRange {
+  id              String   @id @default(cuid())
+  sessionId       String
+  eventKey        String   @db.VarChar(80)
+  rangeKey        String   @db.VarChar(80)
+  startMs         Int
+  endMs           Int
+  observedStartAt DateTime
+  observedEndAt   DateTime
+  receivedAt      DateTime @default(now())
+
+  session AcademySession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  event   AcademyEvent   @relation(fields: [sessionId, eventKey], references: [sessionId, eventKey], onDelete: Cascade)
+
+  @@unique([sessionId, rangeKey])
+  @@index([sessionId, startMs, endMs])
+  @@index([sessionId, eventKey])
+}
+
+model AcademyLead {
+  id        String   @id @default(cuid())
+  sessionId String
+  name      String   @db.VarChar(160)
+  email     String   @db.VarChar(320)
+  phone     String   @db.VarChar(40)
+
+  funnelKey String? @db.VarChar(80)
+  vslKey    String? @db.VarChar(80)
+  videoId   String? @db.VarChar(200)
+  utmSource String? @db.VarChar(200)
+  utmMedium String? @db.VarChar(200)
+  utmCampaign String? @db.VarChar(200)
+  utmContent String? @db.VarChar(200)
+  utmTerm String? @db.VarChar(200)
+  utmId String? @db.VarChar(200)
+  fbclid String? @db.VarChar(500)
+  fbp String? @db.VarChar(256)
+  fbc String? @db.VarChar(512)
+  gclid String? @db.VarChar(500)
+  wbraid String? @db.VarChar(500)
+  gbraid String? @db.VarChar(500)
+  campaignId String? @db.VarChar(120)
+  adsetId String? @db.VarChar(120)
+  adId String? @db.VarChar(120)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  session AcademySession @relation(fields: [sessionId], references: [id], onDelete: Restrict)
+  sales AcademySale[]
+
+  @@index([sessionId])
+  @@index([email])
+  @@index([phone])
+  @@index([createdAt])
+}
+
+model AcademySale {
+  id String @id @default(cuid())
+  provider AcademySaleProvider @default(HOTMART)
+  providerTransactionId String?
+  providerOrderId String?
+  leadId String?
+  sessionId String?
+  buyerName String? @db.VarChar(160)
+  buyerEmail String? @db.VarChar(320)
+  buyerPhone String? @db.VarChar(40)
+  productId String? @db.VarChar(120)
+  productName String? @db.VarChar(200)
+  offerId String? @db.VarChar(120)
+  status AcademySaleStatus
+  currency String? @db.VarChar(10)
+  grossAmount Decimal? @db.Decimal(18, 2)
+  netAmount Decimal? @db.Decimal(18, 2)
+  approvedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  lead AcademyLead? @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  session AcademySession? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+  webhooks AcademyWebhookEvent[]
+
+  @@unique([provider, providerTransactionId])
+  @@unique([provider, providerOrderId])
+  @@index([leadId])
+  @@index([sessionId])
+  @@index([status, approvedAt])
+}
+
+model AcademyWebhookEvent {
+  id String @id @default(cuid())
+  provider AcademySaleProvider @default(HOTMART)
+  providerEventId String?
+  transactionId String?
+  orderId String?
+  eventType String @db.VarChar(100)
+  receivedAt DateTime @default(now())
+  processedAt DateTime?
+  processingStatus AcademyWebhookProcessingStatus @default(RECEIVED)
+  payload Json
+  processingError String? @db.VarChar(1000)
+  saleId String?
+
+  sale AcademySale? @relation(fields: [saleId], references: [id], onDelete: SetNull)
+
+  @@unique([provider, providerEventId])
+  @@unique([provider, transactionId, eventType])
+  @@index([processingStatus, receivedAt])
+  @@index([saleId])
+}
