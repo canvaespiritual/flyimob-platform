@@ -4,7 +4,7 @@ import { useEffect } from 'react';
 
 declare global {
   interface Window {
-    fbq?: (...args: any[]) => void;
+    fbq?: (...args: unknown[]) => void;
     _fbq?: any;
   }
 }

@@ -166,9 +166,9 @@ return base;
             </div>
 
             <div className="flex items-center gap-3">
-              <a href="/" className="text-sm border rounded px-3 py-2 hover:bg-gray-50">
+              <Link href="/" className="text-sm border rounded px-3 py-2 hover:bg-gray-50">
                 Ver mapa
-              </a>
+              </Link>
 
               <div className="hidden sm:block text-sm px-3 py-2 rounded border">
                 <span className="text-gray-500">{userName}</span>{" "}
