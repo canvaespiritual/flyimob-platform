@@ -1,0 +1,17 @@
+{
+  "id": "/academy-admin",
+  "name": "Corretor Academy — Administração",
+  "short_name": "Academy",
+  "description": "Checkouts e vendas do Corretor Academy",
+  "lang": "pt-BR",
+  "start_url": "/academy-admin",
+  "scope": "/academy-admin",
+  "display": "standalone",
+  "background_color": "#020617",
+  "theme_color": "#020617",
+  "icons": [
+    { "src": "/academy-admin/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/academy-admin/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/academy-admin/icon-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

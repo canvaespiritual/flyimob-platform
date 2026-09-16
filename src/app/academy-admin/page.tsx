@@ -1,2 +1,5 @@
-import Link from "next/link";
-export default function AcademyHome() { return <main className="mx-auto max-w-7xl p-6"><div className="flex items-center justify-between"><div><p className="text-sm text-orange-400">Central Operacional</p><h1 className="text-3xl font-bold">Academy</h1></div><Link href="/admin" className="rounded border border-slate-700 px-3 py-2 text-sm">Admin</Link></div><div className="mt-8 grid gap-4 md:grid-cols-3"><Link href="/admin/academy/analytics" className="rounded-xl border border-slate-800 bg-slate-900 p-6 hover:border-orange-400"><h2 className="text-xl font-semibold">Analytics</h2><p className="mt-2 text-sm text-slate-400">Retenção, pitch, checkout e vendas.</p></Link><Link href="/admin/academy/checkouts" className="rounded-xl border border-slate-800 bg-slate-900 p-6 hover:border-orange-400"><h2 className="text-xl font-semibold">Leads e checkouts</h2><p className="mt-2 text-sm text-slate-400">Jornada operacional dos leads.</p></Link></div></main>; }
+import MobileHome from "@/components/academy/MobileHome";
+
+export default function AcademyHome() {
+  return <MobileHome />;
+}

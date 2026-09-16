@@ -1625,6 +1625,49 @@ model FinancialAuditLog {
 }
 
 // Academy is owned by Flyimob, independently of real-estate tenants.
+
+// Push is an independent secondary effect. No foreign keys to commercial records.
+model AcademyPushSubscription {
+  id           String   @id @default(cuid())
+  userId       String
+  endpointHash String   @unique @db.Char(64)
+  endpoint     String   @db.VarChar(2048)
+  p256dh       String   @db.VarChar(128)
+  auth         String   @db.VarChar(64)
+  active       Boolean  @default(true)
+  subscribedAt DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  deliveries   AcademyPushDelivery[]
+
+  @@index([userId, active])
+}
+
+model AcademyPushNotification {
+  id         String   @id @default(cuid())
+  eventKey   String   @unique @db.VarChar(200)
+  kind       String   @db.VarChar(20)
+  sourceId   String
+  occurredAt DateTime
+  createdAt  DateTime @default(now())
+  deliveries AcademyPushDelivery[]
+}
+
+model AcademyPushDelivery {
+  id             String   @id @default(cuid())
+  notificationId String
+  subscriptionId String
+  state          String   @default("PENDING") @db.VarChar(20)
+  attempts       Int      @default(0)
+  nextAttemptAt  DateTime @default(now())
+  claimedAt      DateTime?
+  sentAt         DateTime?
+  lastStatus     Int?
+  notification   AcademyPushNotification @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+  subscription   AcademyPushSubscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+  @@unique([notificationId, subscriptionId])
+  @@index([state, nextAttemptAt])
+}
 enum AcademyEventType {
   PLAYER_READY
   PLAY
