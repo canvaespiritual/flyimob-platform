@@ -16,6 +16,21 @@ export const viewport: Viewport = { width: "device-width", initialScale: 1, them
 export default async function AcademyLayout({ children }: { children: React.ReactNode }) {
   const session = await getSessionUser();
   if (!session) redirect("/login?returnTo=%2Facademy-admin");
-  if (!isAcademyAdmin(session.user.id)) return <main className="min-h-screen bg-slate-950 p-6 text-white"><h1>Acesso restrito ao Academy</h1><p>Solicite autorização para seu usuário.</p></main>;
+  if (!isAcademyAdmin(session.user.id)) {
+    return (
+      <main className="min-h-screen bg-slate-950 p-6 text-white">
+        <h1 className="text-2xl font-semibold">Acesso restrito ao Academy</h1>
+        <p className="mt-3">Solicite autorização para seu usuário.</p>
+        <p className="mt-4 text-slate-300">
+          Conectado como {session.user.name} ({session.user.email})
+        </p>
+        <form action="/api/auth/academy-logout" method="post" className="mt-6">
+          <button type="submit" className="rounded-lg bg-orange-500 px-4 py-2 font-medium text-white hover:bg-orange-600">
+            Sair / Trocar usuário
+          </button>
+        </form>
+      </main>
+    );
+  }
   return <AcademyShell>{children}</AcademyShell>;
 }
