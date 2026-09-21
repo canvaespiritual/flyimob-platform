@@ -82,6 +82,10 @@ export async function POST(
       );
     }
 
+    if (attachment.entityType === "RECEIPT_REMITTANCE") {
+      return Response.json({ error: "O comprovante de uma remessa confirmada não pode ser excluído diretamente." }, { status: 409 });
+    }
+
     if (
       attachment.storageKey
     ) {

@@ -395,7 +395,9 @@ const receiptsWithoutAttachment =
   confirmedReceipts.filter(
     (receipt) =>
       !attachmentKeys.has(
-        `RECEIPT:${receipt.id}`
+        receipt.remittanceId
+          ? `RECEIPT_REMITTANCE:${receipt.remittanceId}`
+          : `RECEIPT:${receipt.id}`
       )
   );  
   const receivedAmount =
@@ -1475,6 +1477,10 @@ const receiptIds =
     )
   );
 
+const receiptRemittanceIds = Array.from(new Set(rawSales.flatMap((sale) =>
+  sale.stages.flatMap((stage) => stage.receipts.map((receipt) => receipt.remittanceId).filter((id): id is string => Boolean(id)))
+)));
+
 const financialAttachments =
   await prisma.financialAttachment.findMany({
     where: {
@@ -1492,6 +1498,10 @@ const financialAttachments =
           entityId: {
             in: receiptIds,
           },
+        },
+        {
+          entityType: "RECEIPT_REMITTANCE",
+          entityId: { in: receiptRemittanceIds },
         },
       ],
     },

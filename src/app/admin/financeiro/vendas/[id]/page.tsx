@@ -364,6 +364,7 @@ export default async function VendaFinanceiraPage({
 
                         reference:
                           receipt.reference,
+                        remittanceId: receipt.remittanceId,
                       })
                     ),
 

@@ -43,6 +43,7 @@ export default function FinancialAttachmentsManager({
     | "ADJUSTMENT"
     | "INVOICE"
     | "RECEIPT"
+    | "RECEIPT_REMITTANCE"
     | "TAX_ENTRY"
     | "TAX_CLOSING"
     | "TAX_MOVEMENT";

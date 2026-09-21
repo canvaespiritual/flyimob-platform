@@ -9,6 +9,7 @@ import {
 import {
   useRouter,
 } from "next/navigation";
+import Link from "next/link";
 
 import FinancialAttachmentsManager from "@/components/financeiro/FinancialAttachmentsManager";
 
@@ -32,6 +33,7 @@ type Receipt = {
   reference:
     | string
     | null;
+  remittanceId?: string | null;
 };
 
 function moneyInput(
@@ -399,7 +401,7 @@ export default function ReceiptCard({
         <div className="divide-y">
           {receipts.map(
             (receipt) =>
-              editingId ===
+              !receipt.remittanceId && editingId ===
               receipt.id ? (
                 <div
                   key={
@@ -435,6 +437,7 @@ export default function ReceiptCard({
                           : "Sem data"}
                       </div>
 
+                      {receipt.remittanceId && <div className="mt-1 text-xs text-gray-600">Parcela de remessa de recebimento · <Link className="underline" href={`/admin/financeiro/recebimentos/${receipt.remittanceId}`}>Remessa #{receipt.remittanceId.slice(-8)}</Link></div>}
                       {receipt.reference && (
                         <div className="mt-1 text-xs text-gray-500">
                           {
@@ -452,7 +455,7 @@ export default function ReceiptCard({
                         )}
                       </div>
 
-                      <button
+                      {!receipt.remittanceId && <button
                         type="button"
                         onClick={() => {
                           setCreating(
@@ -466,11 +469,12 @@ export default function ReceiptCard({
                         className="text-xs font-medium underline"
                       >
                         Editar
-                      </button>
+                      </button>}
                     </div>
                   </div>
 
-                  {receipt.status !==
+                  {receipt.remittanceId && receipt.status !== "CANCELLED" && <div className="mt-4"><FinancialAttachmentsManager entityType="RECEIPT_REMITTANCE" entityId={receipt.remittanceId} attachmentType="BUILDER_RECEIPT" title="Comprovante único da remessa" compact readOnly /></div>}
+                  {!receipt.remittanceId && receipt.status !==
                     "CANCELLED" && (
                     <div className="mt-4">
                       <FinancialAttachmentsManager

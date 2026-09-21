@@ -98,6 +98,7 @@ async function entityExists(
             id:
               entityId,
             tenantId,
+            remittanceId: null,
           },
 
           select: {
@@ -105,6 +106,11 @@ async function entityExists(
           },
         })
       );
+
+    case "RECEIPT_REMITTANCE":
+      return Boolean(await prisma.financialReceiptRemittance.findFirst({
+        where: { id: entityId, tenantId, status: "CONFIRMED" }, select: { id: true },
+      }));
 
     case "TAX_ENTRY":
       return Boolean(
@@ -220,6 +226,7 @@ export async function POST(
     "ADJUSTMENT",
     "INVOICE",
     "RECEIPT",
+    "RECEIPT_REMITTANCE",
     "TAX_ENTRY",
     "TAX_CLOSING",
     "TAX_MOVEMENT",
@@ -275,6 +282,17 @@ export async function POST(
           status: 404,
         }
       );
+    }
+
+    if (entityType === "RECEIPT_REMITTANCE" && type !== "BUILDER_RECEIPT") {
+      return Response.json({ error: "A remessa aceita apenas comprovante bancário." }, { status: 400 });
+    }
+
+    if (entityType === "RECEIPT_REMITTANCE") {
+      const existingProof = await prisma.financialAttachment.findFirst({
+        where: { tenantId, entityType, entityId, type: "BUILDER_RECEIPT" }, select: { id: true },
+      });
+      if (existingProof) return Response.json({ error: "A remessa já possui comprovante." }, { status: 409 });
     }
 
     const maxBytes =

@@ -43,6 +43,7 @@ export async function POST(req: Request) {
 
         select: {
           id: true,
+          remittanceId: true,
         },
       });
 
@@ -54,6 +55,10 @@ export async function POST(req: Request) {
         },
         { status: 404 }
       );
+    }
+
+    if (existing.remittanceId) {
+      return Response.json({ error: "Parcela de remessa não pode ser editada individualmente." }, { status: 409 });
     }
 
     const receipt =

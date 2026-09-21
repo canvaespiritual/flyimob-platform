@@ -253,6 +253,7 @@ enum FinancialAttachmentEntityType {
   STAGE
   INVOICE
   RECEIPT
+  RECEIPT_REMITTANCE
   PARTICIPANT
   ENTITLEMENT
   ADJUSTMENT
@@ -417,9 +418,10 @@ model Construtora {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  tenant          Tenant           @relation(fields: [tenantId], references: [id])
-  empreendimentos Empreendimento[]
-  financialSales  FinancialSale[]
+  tenant             Tenant                       @relation(fields: [tenantId], references: [id])
+  empreendimentos    Empreendimento[]
+  financialSales     FinancialSale[]
+  receiptRemittances FinancialReceiptRemittance[]
 
   @@unique([tenantId, name])
   @@index([tenantId])
@@ -847,6 +849,7 @@ model FinancialAccount {
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   receipts           FinancialReceipt[]
+  receiptRemittances FinancialReceiptRemittance[]
   payments           FinancialPayment[]
   companyAllocations FinancialCompanyAllocation[]
   taxClosings        FinancialTaxClosing[]
@@ -862,12 +865,37 @@ model FinancialAccount {
 // Uma NF/etapa pode ser recebida em mais de uma entrada.
 // =====================================================
 
+model FinancialReceiptRemittance {
+  id                 String                 @id @default(cuid())
+  tenantId           String
+  construtoraId      String
+  financialAccountId String
+  amount             Decimal                @db.Decimal(18, 2)
+  expectedAmount     Decimal?               @db.Decimal(18, 2)
+  receivedAt         DateTime
+  reference          String?
+  notes              String?
+  status             FinancialReceiptStatus @default(CONFIRMED)
+  createdById        String
+  createdAt          DateTime               @default(now())
+  updatedAt          DateTime               @updatedAt
+
+  construtora      Construtora        @relation(fields: [construtoraId], references: [id])
+  financialAccount FinancialAccount   @relation(fields: [financialAccountId], references: [id])
+  receipts         FinancialReceipt[]
+
+  @@index([tenantId, construtoraId])
+  @@index([tenantId, receivedAt])
+  @@index([financialAccountId])
+}
+
 model FinancialReceipt {
   id       String @id @default(cuid())
   tenantId String
 
-  stageId   String
-  invoiceId String?
+  stageId      String
+  invoiceId    String?
+  remittanceId String?
 
   financialAccountId String?
 
@@ -889,13 +917,15 @@ model FinancialReceipt {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  stage            FinancialStage    @relation(fields: [stageId], references: [id], onDelete: Cascade)
-  invoice          FinancialInvoice? @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
-  financialAccount FinancialAccount? @relation(fields: [financialAccountId], references: [id], onDelete: SetNull)
+  stage            FinancialStage              @relation(fields: [stageId], references: [id], onDelete: Cascade)
+  invoice          FinancialInvoice?           @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+  remittance       FinancialReceiptRemittance? @relation(fields: [remittanceId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  financialAccount FinancialAccount?           @relation(fields: [financialAccountId], references: [id], onDelete: SetNull)
 
   @@index([tenantId])
   @@index([stageId])
   @@index([invoiceId])
+  @@index([remittanceId])
   @@index([receivedAt])
   @@index([tenantId, status])
 }
