@@ -78,6 +78,7 @@ export async function POST(
               },
             },
           },
+          invoiceAllocations: { where: { invoice: { status: "ISSUED" } }, select: { id: true } },
         },
       });
 
@@ -94,6 +95,7 @@ export async function POST(
         }
       );
     }
+    if (stage.invoiceAllocations.length > 0) throw new Error("Etapa com NF agrupada deve ser recebida pela central de remessas.");
 
     const amount =
       requiredDecimal(

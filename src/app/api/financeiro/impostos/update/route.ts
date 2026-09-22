@@ -5,6 +5,8 @@ import {
 import { prisma } from "@/lib/prisma";
 
 import { getFinanceApiSession } from "@/lib/financeiro/access.server";
+import { assertOpenTaxCompetence } from "@/lib/financeiro/grouped-invoicing.server";
+import { refreshFinancialStageStatus } from "@/lib/financeiro/stage-status.server";
 
 import {
   errorMessage,
@@ -46,6 +48,9 @@ export async function POST(req: Request) {
 
         select: {
           id: true,
+          invoiceId: true,
+          invoice: { select: { stageId: true, competenceYear: true, competenceMonth: true,
+            allocations: { select: { stageId: true } } } },
         },
       });
 
@@ -58,6 +63,19 @@ export async function POST(req: Request) {
         { status: 404 }
       );
     }
+    const targetInvoiceId = requiredString(body.invoiceId, "Nota");
+    const targetInvoice = await prisma.financialInvoice.findFirst({ where: { id: targetInvoiceId, tenantId },
+      select: { id: true, stageId: true, competenceYear: true, competenceMonth: true } });
+    if (!targetInvoice) throw new Error("Nota fiscal não encontrada no tenant.");
+    if ((!existing.invoice.stageId || !targetInvoice.stageId) && targetInvoiceId !== existing.invoiceId) {
+      throw new Error("Imposto de NF agrupada não pode ser transferido entre NFs.");
+    }
+    for (const invoice of [existing.invoice, targetInvoice]) {
+      if (!invoice.stageId) {
+        if (!invoice.competenceYear || !invoice.competenceMonth) throw new Error("NF agrupada sem competência.");
+        await assertOpenTaxCompetence(prisma, tenantId, invoice.competenceYear, invoice.competenceMonth);
+      }
+    }
 
     const kind =
       requiredString(
@@ -65,18 +83,8 @@ export async function POST(req: Request) {
         "Tipo"
       ) as FinancialTaxKind;
 
-    const tax =
-      await prisma.financialTaxEntry.update({
-        where: {
-          id,
-        },
-
-        data: {
-          invoiceId:
-            requiredString(
-              body.invoiceId,
-              "Nota"
-            ),
+    const data = {
+          invoiceId: targetInvoiceId,
 
           name:
             requiredString(
@@ -99,10 +107,18 @@ export async function POST(req: Request) {
 
           status:
   kind === "WITHHELD_AT_SOURCE"
-    ? "WITHHELD"
-    : "PENDING",
-        },
-      });
+    ? "WITHHELD" as const
+    : "PENDING" as const,
+        };
+    const tax = existing.invoice.stageId
+      ? await prisma.financialTaxEntry.update({ where: { id }, data })
+      : await prisma.$transaction(async (tx) => {
+        const updated = await tx.financialTaxEntry.update({ where: { id }, data });
+        for (const item of existing.invoice.allocations) {
+          await refreshFinancialStageStatus(tx, { stageId: item.stageId, tenantId });
+        }
+        return updated;
+      }, { maxWait: 10000, timeout: 20000 });
 
     return Response.json({
       ok: true,

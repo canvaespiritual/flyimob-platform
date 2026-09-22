@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 
-type Invoice = { id: string; number: string | null; stageId: string; stageType: string; stageLabel: string | null;
+type Invoice = { id: string; key: string; grouped: boolean; number: string | null; stageId: string; stageType: string; stageLabel: string | null;
   saleId: string; clientName: string; construtoraId: string; construtora: string; empreendimento: string;
   gross: string; withheld: string; balance: string };
 type Account = { id: string; name: string; bankName: string | null };
@@ -32,7 +32,7 @@ export default function ReceiptRemittanceCenter({ invoices, accounts, remittance
   const [amount, setAmount] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  const selectedInvoices = invoices.filter((invoice) => selected[invoice.id] !== undefined);
+  const selectedInvoices = invoices.filter((invoice) => selected[invoice.key] !== undefined);
   const selectedBuilder = selectedInvoices[0]?.construtoraId;
   const visible = invoices.filter((invoice) => (!builder || invoice.construtoraId === builder)
     && (!project || invoice.empreendimento === project)
@@ -43,7 +43,7 @@ export default function ReceiptRemittanceCenter({ invoices, accounts, remittance
   }, 0n), [selected]);
   const totalString = total === null ? "" : `${total / 100n}.${String(total % 100n).padStart(2, "0")}`;
   const validItems = selectedInvoices.length > 0 && selectedInvoices.every((invoice) => {
-    const value = cents(selected[invoice.id]);
+    const value = cents(selected[invoice.key]);
     return value !== null && value > 0n && value <= cents(invoice.balance)!;
   });
   const canSubmit = validItems && !!accountId && !!date && cents(amount) !== null && cents(amount) === total && !saving;
@@ -52,7 +52,7 @@ export default function ReceiptRemittanceCenter({ invoices, accounts, remittance
     setSaving(true); setError("");
     try {
       const response = await fetch("/api/financeiro/remessas-recebimento", { method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ items: selectedInvoices.map((invoice) => ({ invoiceId: invoice.id, amount: selected[invoice.id] })),
+        body: JSON.stringify({ items: selectedInvoices.map((invoice) => ({ invoiceId: invoice.id, stageId: invoice.grouped ? invoice.stageId : undefined, amount: selected[invoice.key] })),
           financialAccountId: accountId, receivedAt: `${date}T12:00:00.000Z`, amount, reference, notes }) });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error ?? "Erro ao confirmar recebimento.");
@@ -69,15 +69,15 @@ export default function ReceiptRemittanceCenter({ invoices, accounts, remittance
         <select aria-label="Empreendimento" className="rounded border p-2" value={project} onChange={(e) => setProject(e.target.value)}><option value="">Todos os empreendimentos</option>{Array.from(new Set(invoices.map((item) => item.empreendimento).filter(Boolean))).sort().map((name) => <option key={name}>{name}</option>)}</select>
         <input aria-label="Buscar NF, cliente ou etapa" className="rounded border p-2" placeholder="Buscar NF, cliente ou etapa" value={search} onChange={(e) => setSearch(e.target.value)} />
       </div>
-      <div className="max-h-[28rem] overflow-auto divide-y border rounded">{visible.map((invoice) => <label key={invoice.id} className="flex items-start gap-3 p-3 hover:bg-gray-50">
-        <input type="checkbox" className="mt-1" checked={selected[invoice.id] !== undefined} disabled={!!selectedBuilder && selectedBuilder !== invoice.construtoraId && selected[invoice.id] === undefined}
-          onChange={(e) => setSelected((current) => { const next = { ...current }; if (e.target.checked) next[invoice.id] = invoice.balance; else delete next[invoice.id]; return next; })} />
-        <span className="flex-1"><strong>NF {invoice.number ?? "sem número"}</strong> · {invoice.clientName} · {invoice.stageType}{invoice.stageLabel ? ` (${invoice.stageLabel})` : ""}<span className="block text-sm text-gray-600">{invoice.construtora} · {invoice.empreendimento || "Sem empreendimento"} · Bruto {brl(invoice.gross)} · Retenção {brl(invoice.withheld)}</span></span>
+      <div className="max-h-[28rem] overflow-auto divide-y border rounded">{visible.map((invoice, index) => <div key={invoice.key}>{invoice.grouped && !visible.slice(0, index).some((item) => item.id === invoice.id) && <div className="bg-gray-50 px-3 py-2 text-sm font-semibold">NF {invoice.number ?? "sem número"} · AGRUPADA · {invoice.construtora}</div>}<label className="flex items-start gap-3 p-3 hover:bg-gray-50">
+        <input type="checkbox" className="mt-1" checked={selected[invoice.key] !== undefined} disabled={!!selectedBuilder && selectedBuilder !== invoice.construtoraId && selected[invoice.key] === undefined}
+          onChange={(e) => setSelected((current) => { const next = { ...current }; if (e.target.checked) next[invoice.key] = invoice.balance; else delete next[invoice.key]; return next; })} />
+        <span className="flex-1"><strong>{invoice.grouped ? "Parcela" : `NF ${invoice.number ?? "sem número"}`}</strong> · {invoice.clientName} · {invoice.stageType}{invoice.stageLabel ? ` (${invoice.stageLabel})` : ""}<span className="block text-sm text-gray-600">{invoice.construtora} · {invoice.empreendimento || "Sem empreendimento"} · Bruto {brl(invoice.gross)} · Retenção {brl(invoice.withheld)}</span></span>
         <span className="font-medium whitespace-nowrap">Saldo {brl(invoice.balance)}</span>
-      </label>)}{visible.length === 0 && <p className="p-4 text-sm text-gray-500">Nenhuma NF com saldo disponível para os filtros.</p>}</div>
+      </label></div>)}{visible.length === 0 && <p className="p-4 text-sm text-gray-500">Nenhuma NF com saldo disponível para os filtros.</p>}</div>
     </section>
     {selectedInvoices.length > 0 && <section className="rounded-lg border bg-white p-5 space-y-4"><h2 className="text-lg font-semibold">Nova remessa · {selectedInvoices[0].construtora}</h2>
-      <div className="space-y-2">{selectedInvoices.map((invoice) => <div key={invoice.id} className="flex flex-wrap items-center gap-3 border-b pb-2 text-sm"><span className="flex-1">NF {invoice.number ?? "sem número"} · {invoice.clientName} · {invoice.stageType} · saldo {brl(invoice.balance)}</span><input aria-label={`Parcela da NF ${invoice.number ?? invoice.id}`} type="number" min="0.01" max={invoice.balance} step="0.01" className="w-36 rounded border p-2" value={selected[invoice.id]} onChange={(e) => setSelected((current) => ({ ...current, [invoice.id]: e.target.value }))} /></div>)}</div>
+      <div className="space-y-2">{selectedInvoices.map((invoice) => <div key={invoice.key} className="flex flex-wrap items-center gap-3 border-b pb-2 text-sm"><span className="flex-1">NF {invoice.number ?? "sem número"} · {invoice.clientName} · {invoice.stageType} · saldo {brl(invoice.balance)}</span><input aria-label={`Parcela da NF ${invoice.number ?? invoice.id} para ${invoice.clientName} ${invoice.stageType}`} type="number" min="0.01" max={invoice.balance} step="0.01" className="w-36 rounded border p-2" value={selected[invoice.key]} onChange={(e) => setSelected((current) => ({ ...current, [invoice.key]: e.target.value }))} /></div>)}</div>
       <p className="font-medium">Soma das parcelas: {totalString ? brl(totalString) : "Valor inválido"}</p>
       <div className="grid gap-3 sm:grid-cols-2"><label className="text-sm">Conta de destino<select className="mt-1 block w-full rounded border p-2" value={accountId} onChange={(e) => setAccountId(e.target.value)}><option value="">Selecione</option>{accounts.map((account) => <option key={account.id} value={account.id}>{account.name}{account.bankName ? ` · ${account.bankName}` : ""}</option>)}</select></label>
         <label className="text-sm">Data recebida<input type="date" className="mt-1 block w-full rounded border p-2" value={date} onChange={(e) => setDate(e.target.value)} /></label>

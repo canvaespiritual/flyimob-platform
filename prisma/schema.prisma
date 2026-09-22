@@ -418,10 +418,11 @@ model Construtora {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  tenant             Tenant                       @relation(fields: [tenantId], references: [id])
-  empreendimentos    Empreendimento[]
-  financialSales     FinancialSale[]
-  receiptRemittances FinancialReceiptRemittance[]
+  tenant                   Tenant                       @relation(fields: [tenantId], references: [id])
+  empreendimentos          Empreendimento[]
+  financialSales           FinancialSale[]
+  receiptRemittances       FinancialReceiptRemittance[]
+  groupedFinancialInvoices FinancialInvoice[]
 
   @@unique([tenantId, name])
   @@index([tenantId])
@@ -768,6 +769,7 @@ model FinancialStage {
   sale FinancialSale @relation(fields: [saleId], references: [id], onDelete: Cascade)
 
   invoices           FinancialInvoice[]
+  invoiceAllocations FinancialInvoiceAllocation[]
   receipts           FinancialReceipt[]
   entitlements       FinancialEntitlement[]
   companyAllocations FinancialCompanyAllocation[]
@@ -785,9 +787,10 @@ model FinancialStage {
 // =====================================================
 
 model FinancialInvoice {
-  id       String @id @default(cuid())
-  tenantId String
-  stageId  String
+  id            String  @id @default(cuid())
+  tenantId      String
+  stageId       String?
+  construtoraId String?
 
   number String?
 
@@ -808,16 +811,35 @@ model FinancialInvoice {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  stage FinancialStage @relation(fields: [stageId], references: [id], onDelete: Cascade)
+  stage       FinancialStage?              @relation(fields: [stageId], references: [id], onDelete: Cascade)
+  construtora Construtora?                 @relation(fields: [construtoraId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  allocations FinancialInvoiceAllocation[]
 
   taxEntries FinancialTaxEntry[]
   receipts   FinancialReceipt[]
 
   @@index([tenantId])
   @@index([stageId])
+  @@index([tenantId, construtoraId])
   @@index([issuedAt])
   @@index([tenantId, competenceYear, competenceMonth])
   @@index([status])
+}
+
+model FinancialInvoiceAllocation {
+  id        String   @id @default(cuid())
+  tenantId  String
+  invoiceId String
+  stageId   String
+  amount    Decimal  @db.Decimal(18, 2)
+  createdAt DateTime @default(now())
+
+  invoice FinancialInvoice @relation(fields: [invoiceId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  stage   FinancialStage   @relation(fields: [stageId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@unique([invoiceId, stageId])
+  @@index([tenantId, invoiceId])
+  @@index([tenantId, stageId])
 }
 
 // =====================================================
@@ -1658,37 +1680,37 @@ model FinancialAuditLog {
 
 // Push is an independent secondary effect. No foreign keys to commercial records.
 model AcademyPushSubscription {
-  id           String   @id @default(cuid())
+  id           String                @id @default(cuid())
   userId       String
-  endpointHash String   @unique @db.Char(64)
-  endpoint     String   @db.VarChar(2048)
-  p256dh       String   @db.VarChar(128)
-  auth         String   @db.VarChar(64)
-  active       Boolean  @default(true)
-  subscribedAt DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  endpointHash String                @unique @db.Char(64)
+  endpoint     String                @db.VarChar(2048)
+  p256dh       String                @db.VarChar(128)
+  auth         String                @db.VarChar(64)
+  active       Boolean               @default(true)
+  subscribedAt DateTime              @default(now())
+  updatedAt    DateTime              @updatedAt
   deliveries   AcademyPushDelivery[]
 
   @@index([userId, active])
 }
 
 model AcademyPushNotification {
-  id         String   @id @default(cuid())
-  eventKey   String   @unique @db.VarChar(200)
-  kind       String   @db.VarChar(20)
+  id         String                @id @default(cuid())
+  eventKey   String                @unique @db.VarChar(200)
+  kind       String                @db.VarChar(20)
   sourceId   String
   occurredAt DateTime
-  createdAt  DateTime @default(now())
+  createdAt  DateTime              @default(now())
   deliveries AcademyPushDelivery[]
 }
 
 model AcademyPushDelivery {
-  id             String   @id @default(cuid())
+  id             String                  @id @default(cuid())
   notificationId String
   subscriptionId String
-  state          String   @default("PENDING") @db.VarChar(20)
-  attempts       Int      @default(0)
-  nextAttemptAt  DateTime @default(now())
+  state          String                  @default("PENDING") @db.VarChar(20)
+  attempts       Int                     @default(0)
+  nextAttemptAt  DateTime                @default(now())
   claimedAt      DateTime?
   sentAt         DateTime?
   lastStatus     Int?
@@ -1698,6 +1720,7 @@ model AcademyPushDelivery {
   @@unique([notificationId, subscriptionId])
   @@index([state, nextAttemptAt])
 }
+
 enum AcademyEventType {
   PLAYER_READY
   PLAY
@@ -1837,36 +1860,36 @@ model AcademyWatchRange {
 }
 
 model AcademyLead {
-  id        String   @id @default(cuid())
+  id        String @id @default(cuid())
   sessionId String
-  name      String   @db.VarChar(160)
-  email     String   @db.VarChar(320)
-  phone     String   @db.VarChar(40)
+  name      String @db.VarChar(160)
+  email     String @db.VarChar(320)
+  phone     String @db.VarChar(40)
 
-  funnelKey String? @db.VarChar(80)
-  vslKey    String? @db.VarChar(80)
-  videoId   String? @db.VarChar(200)
-  utmSource String? @db.VarChar(200)
-  utmMedium String? @db.VarChar(200)
+  funnelKey   String? @db.VarChar(80)
+  vslKey      String? @db.VarChar(80)
+  videoId     String? @db.VarChar(200)
+  utmSource   String? @db.VarChar(200)
+  utmMedium   String? @db.VarChar(200)
   utmCampaign String? @db.VarChar(200)
-  utmContent String? @db.VarChar(200)
-  utmTerm String? @db.VarChar(200)
-  utmId String? @db.VarChar(200)
-  fbclid String? @db.VarChar(500)
-  fbp String? @db.VarChar(256)
-  fbc String? @db.VarChar(512)
-  gclid String? @db.VarChar(500)
-  wbraid String? @db.VarChar(500)
-  gbraid String? @db.VarChar(500)
-  campaignId String? @db.VarChar(120)
-  adsetId String? @db.VarChar(120)
-  adId String? @db.VarChar(120)
+  utmContent  String? @db.VarChar(200)
+  utmTerm     String? @db.VarChar(200)
+  utmId       String? @db.VarChar(200)
+  fbclid      String? @db.VarChar(500)
+  fbp         String? @db.VarChar(256)
+  fbc         String? @db.VarChar(512)
+  gclid       String? @db.VarChar(500)
+  wbraid      String? @db.VarChar(500)
+  gbraid      String? @db.VarChar(500)
+  campaignId  String? @db.VarChar(120)
+  adsetId     String? @db.VarChar(120)
+  adId        String? @db.VarChar(120)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   session AcademySession @relation(fields: [sessionId], references: [id], onDelete: Restrict)
-  sales AcademySale[]
+  sales   AcademySale[]
 
   @@index([sessionId])
   @@index([email])
@@ -1875,28 +1898,28 @@ model AcademyLead {
 }
 
 model AcademySale {
-  id String @id @default(cuid())
-  provider AcademySaleProvider @default(HOTMART)
+  id                    String              @id @default(cuid())
+  provider              AcademySaleProvider @default(HOTMART)
   providerTransactionId String?
-  providerOrderId String?
-  leadId String?
-  sessionId String?
-  buyerName String? @db.VarChar(160)
-  buyerEmail String? @db.VarChar(320)
-  buyerPhone String? @db.VarChar(40)
-  productId String? @db.VarChar(120)
-  productName String? @db.VarChar(200)
-  offerId String? @db.VarChar(120)
-  status AcademySaleStatus
-  currency String? @db.VarChar(10)
-  grossAmount Decimal? @db.Decimal(18, 2)
-  netAmount Decimal? @db.Decimal(18, 2)
-  approvedAt DateTime?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  providerOrderId       String?
+  leadId                String?
+  sessionId             String?
+  buyerName             String?             @db.VarChar(160)
+  buyerEmail            String?             @db.VarChar(320)
+  buyerPhone            String?             @db.VarChar(40)
+  productId             String?             @db.VarChar(120)
+  productName           String?             @db.VarChar(200)
+  offerId               String?             @db.VarChar(120)
+  status                AcademySaleStatus
+  currency              String?             @db.VarChar(10)
+  grossAmount           Decimal?            @db.Decimal(18, 2)
+  netAmount             Decimal?            @db.Decimal(18, 2)
+  approvedAt            DateTime?
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
 
-  lead AcademyLead? @relation(fields: [leadId], references: [id], onDelete: SetNull)
-  session AcademySession? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+  lead     AcademyLead?          @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  session  AcademySession?       @relation(fields: [sessionId], references: [id], onDelete: SetNull)
   webhooks AcademyWebhookEvent[]
 
   @@unique([provider, providerTransactionId])
@@ -1907,18 +1930,18 @@ model AcademySale {
 }
 
 model AcademyWebhookEvent {
-  id String @id @default(cuid())
-  provider AcademySaleProvider @default(HOTMART)
-  providerEventId String?
-  transactionId String?
-  orderId String?
-  eventType String @db.VarChar(100)
-  receivedAt DateTime @default(now())
-  processedAt DateTime?
+  id               String                         @id @default(cuid())
+  provider         AcademySaleProvider            @default(HOTMART)
+  providerEventId  String?
+  transactionId    String?
+  orderId          String?
+  eventType        String                         @db.VarChar(100)
+  receivedAt       DateTime                       @default(now())
+  processedAt      DateTime?
   processingStatus AcademyWebhookProcessingStatus @default(RECEIVED)
-  payload Json
-  processingError String? @db.VarChar(1000)
-  saleId String?
+  payload          Json
+  processingError  String?                        @db.VarChar(1000)
+  saleId           String?
 
   sale AcademySale? @relation(fields: [saleId], references: [id], onDelete: SetNull)
 

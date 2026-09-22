@@ -295,6 +295,17 @@ export async function POST(
       if (existingProof) return Response.json({ error: "A remessa já possui comprovante." }, { status: 409 });
     }
 
+    if (entityType === "INVOICE") {
+      const invoice = await prisma.financialInvoice.findFirst({ where: { id: entityId, tenantId }, select: { stageId: true } });
+      if (invoice && !invoice.stageId) {
+        if (type !== "INVOICE") return Response.json({ error: "A NF agrupada aceita apenas o documento da NF." }, { status: 400 });
+        const existingDocument = await prisma.financialAttachment.findFirst({
+          where: { tenantId, entityType, entityId, type: "INVOICE" }, select: { id: true },
+        });
+        if (existingDocument) return Response.json({ error: "A NF agrupada já possui documento." }, { status: 409 });
+      }
+    }
+
     const maxBytes =
       30 *
       1024 *

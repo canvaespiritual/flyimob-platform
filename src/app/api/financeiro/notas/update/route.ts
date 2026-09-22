@@ -42,6 +42,7 @@ export async function POST(req: Request) {
 
         select: {
           id: true,
+          stageId: true,
         },
       });
 
@@ -54,6 +55,7 @@ export async function POST(req: Request) {
         { status: 404 }
       );
     }
+    if (!existing.stageId) throw new Error("NF agrupada não pode ser editada pela API individual.");
 
     const issuedAt =
       requiredDate(

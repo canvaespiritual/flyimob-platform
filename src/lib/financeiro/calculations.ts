@@ -170,3 +170,26 @@ export function calculateCompanyNet(params: {
     )
   );
 }
+
+/** Keep the pre-allocation dashboard projection unchanged for individual invoices. */
+export function dashboardInvoicedProjection(params: {
+  sharePercent: number;
+  invoiceGross: number;
+  expectedGross: number;
+  companyEconomicNet: number;
+  hasIssuedAllocation: boolean;
+}) {
+  if (!params.hasIssuedAllocation) {
+    return { knownSharePercent: params.sharePercent, futureProjectedNet: 0 };
+  }
+
+  const knownSharePercent = params.sharePercent * Math.min(
+    1,
+    params.invoiceGross / Math.max(params.invoiceGross, params.expectedGross)
+  );
+  const unfactoredGross = Math.max(0, params.expectedGross - params.invoiceGross);
+  const futureProjectedNet = unfactoredGross > 0 && params.invoiceGross > 0
+    ? Math.max(0, params.companyEconomicNet / params.invoiceGross * unfactoredGross)
+    : 0;
+  return { knownSharePercent, futureProjectedNet };
+}

@@ -1,6 +1,7 @@
 import {
   Prisma,
 } from "@prisma/client";
+import { stageInvoiceEconomics } from "./invoice-economics.server";
 
 type PrismaLike =
   Prisma.TransactionClient;
@@ -45,6 +46,7 @@ export async function refreshFinancialStageStatus(
             taxEntries: true,
           },
         },
+        invoiceAllocations: { include: { invoice: { include: { taxEntries: true, allocations: true } } } },
 
         receipts: true,
 
@@ -90,85 +92,12 @@ export async function refreshFinancialStageStatus(
     };
   }
 
-  const invoices =
-    stage.invoices.filter(
-      (invoice) =>
-        invoice.status ===
-        "ISSUED"
-    );
+  const economics = stageInvoiceEconomics(stage);
+  const invoiceGross = Number(economics.gross);
+  const totalPayableTax = Number(economics.payable);
+  const taxSeparated = Number(economics.payableSeparated);
 
-  const invoiceGross =
-    invoices.reduce(
-      (total, invoice) =>
-        total +
-        number(
-          invoice.grossAmount
-        ),
-      0
-    );
-
-  const taxes =
-    invoices.flatMap(
-      (invoice) =>
-        invoice.taxEntries
-    );
-
-  const payableTaxes =
-    taxes.filter(
-      (tax) =>
-        tax.kind ===
-          "PAYABLE_BY_COMPANY" &&
-        tax.status !==
-          "CANCELLED"
-    );
-
-  const totalPayableTax =
-    payableTaxes.reduce(
-      (total, tax) =>
-        total +
-        number(tax.amount),
-      0
-    );
-
-  /*
-   * Só conta para a prova real
-   * quando o imposto já foi
-   * separado ou pago.
-   */
-  const taxSeparated =
-    payableTaxes
-      .filter(
-        (tax) =>
-          tax.status ===
-            "SEPARATED" ||
-          tax.status ===
-            "PAID"
-      )
-      .reduce(
-        (total, tax) =>
-          total +
-          number(
-            tax.amount
-          ),
-        0
-      );
-
-  const confirmedReceipts =
-    stage.receipts.filter(
-      (receipt) =>
-        receipt.status ===
-        "CONFIRMED"
-    );
-
-  const totalReceived =
-    confirmedReceipts.reduce(
-      (total, receipt) =>
-        total +
-        number(
-          receipt.amount
-        ),
-      0
-    );
+  const totalReceived = Number(economics.received);
 
   /*
    * PIX/pagamentos reais.

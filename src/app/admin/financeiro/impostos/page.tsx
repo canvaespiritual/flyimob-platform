@@ -302,6 +302,8 @@ export default async function FinanceiroImpostosPage({
           },
         ],
         include: {
+          construtora: { select: { name: true } },
+          allocations: { include: { stage: { include: { sale: { select: { clientName: true } } } } } },
           taxEntries: {
             where: {
               status: {
@@ -561,7 +563,7 @@ export default async function FinanceiroImpostosPage({
           );
 
         const unlinkedStageReceipts =
-          invoice.stage.invoices.length ===
+          invoice.stage && invoice.stage.invoices.length ===
           1
             ? invoice.stage.receipts
                 .filter(
@@ -605,7 +607,10 @@ export default async function FinanceiroImpostosPage({
           );
 
         const sale =
-          invoice.stage.sale;
+          invoice.stage?.sale;
+        const groupedLabel = invoice.allocations.length > 0
+          ? `NF agrupada — ${invoice.allocations.length} operações`
+          : null;
 
         return {
           id:
@@ -618,15 +623,16 @@ export default async function FinanceiroImpostosPage({
               ? invoice.issuedAt.toISOString()
               : null,
           clientName:
-            sale.clientName,
+            sale?.clientName ?? invoice.allocations.map((item) => item.stage.sale.clientName).join(", "),
           construtoraName:
-            sale.construtora?.name ||
-            sale.construtoraNameManual ||
+            sale?.construtora?.name ||
+            sale?.construtoraNameManual ||
+            invoice.construtora?.name ||
             "—",
           stageType:
-            invoice.stage.type,
+            invoice.stage?.type ?? "OUTRO",
           stageLabel:
-            invoice.stage.label,
+            invoice.stage?.label ?? groupedLabel,
           grossAmount:
             round(
               gross

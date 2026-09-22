@@ -4,6 +4,7 @@ import {
 } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
+import { stageInvoiceEconomics } from "@/lib/financeiro/invoice-economics.server";
 
 import { getFinanceApiSession } from "@/lib/financeiro/access.server";
 
@@ -136,6 +137,8 @@ export async function POST(
                 },
               },
 
+              invoiceAllocations: { include: { invoice: { include: { taxEntries: true, allocations: true } } } },
+
               entitlements: {
                 orderBy: {
                   createdAt: "asc",
@@ -253,19 +256,7 @@ export async function POST(
       const stage
       of previousStages
     ) {
-      let invoicedGross =
-        new Prisma.Decimal(0);
-
-      for (
-        const invoice
-        of stage.invoices
-      ) {
-        invoicedGross =
-          invoicedGross.plus(
-            invoice.grossAmount ||
-              0
-          );
-      }
+      const invoicedGross = stageInvoiceEconomics(stage).gross;
 
       const effectiveGross =
         invoicedGross.gt(0)
@@ -316,19 +307,7 @@ export async function POST(
      * usa o saldo restante da comissão.
      */
 
-    let targetInvoiceGross =
-      new Prisma.Decimal(0);
-
-    for (
-      const invoice
-      of targetStage.invoices
-    ) {
-      targetInvoiceGross =
-        targetInvoiceGross.plus(
-          invoice.grossAmount ||
-            0
-        );
-    }
+    const targetInvoiceGross = stageInvoiceEconomics(targetStage).gross;
 
     const targetGross =
       targetInvoiceGross.gt(0)
@@ -346,35 +325,9 @@ export async function POST(
      * cadastrados na etapa atual.
      */
 
-    const targetTaxes =
-      targetStage.invoices.flatMap(
-        (invoice) =>
-          invoice.taxEntries
-      );
-
-    const withheldTaxes =
-      targetTaxes
-        .filter(
-          (tax) =>
-            tax.kind ===
-            "WITHHELD_AT_SOURCE"
-        )
-        .map(
-          (tax) =>
-            tax.amount
-        );
-
-    const payableTaxes =
-      targetTaxes
-        .filter(
-          (tax) =>
-            tax.kind ===
-            "PAYABLE_BY_COMPANY"
-        )
-        .map(
-          (tax) =>
-            tax.amount
-        );
+    const targetEconomics = stageInvoiceEconomics(targetStage);
+    const withheldTaxes = [targetEconomics.withheld];
+    const payableTaxes = [targetEconomics.payable];
 
     const netAfterWithholding =
       calculateNetAfterWithholding({

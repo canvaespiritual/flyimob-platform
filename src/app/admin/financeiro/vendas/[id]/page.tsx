@@ -7,6 +7,7 @@ import SaleOverview from "@/components/financeiro/SaleOverview";
 import StageCard from "@/components/financeiro/StageCard";
 
 import { requireFinanceAccess } from "@/lib/financeiro/access.server";
+import { allocateTaxCents } from "@/lib/financeiro/invoice-economics.server";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
@@ -62,6 +63,10 @@ export default async function VendaFinanceiraPage({
                   },
                 },
               },
+            },
+
+            invoiceAllocations: {
+              include: { invoice: { include: { taxEntries: true, allocations: true } } },
             },
 
             receipts: {
@@ -339,6 +344,20 @@ export default async function VendaFinanceiraPage({
                           ),
                       })
                     ),
+
+                  groupedInvoices: stage.invoiceAllocations.map((allocation) => ({
+                    id: allocation.invoice.id,
+                    number: allocation.invoice.number,
+                    grossAmount: Number(allocation.amount),
+                    totalGrossAmount: Number(allocation.invoice.grossAmount ?? 0),
+                    status: allocation.invoice.status,
+                    taxEntries: allocation.invoice.taxEntries.map((tax) => ({
+                      id: tax.id, invoiceId: tax.invoiceId, name: tax.name, kind: tax.kind,
+                      rate: tax.rate ? Number(tax.rate) : null,
+                      amount: Number(allocateTaxCents(tax.amount, allocation.invoice.grossAmount,
+                        allocation.invoice.allocations).get(stage.id) ?? 0), status: tax.status,
+                    })),
+                  })),
 
                   receipts:
                     stage.receipts.map(

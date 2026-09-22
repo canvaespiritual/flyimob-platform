@@ -7,6 +7,7 @@
 import { prisma } from "@/lib/prisma";
 
 import { getFinanceApiSession } from "@/lib/financeiro/access.server";
+import { stageInvoiceEconomics } from "@/lib/financeiro/invoice-economics.server";
 
 import {
   calculateEntitlement,
@@ -104,6 +105,7 @@ export async function POST(req: Request) {
               },
             },
           },
+          invoiceAllocations: { include: { invoice: { include: { taxEntries: true, allocations: true } } } },
         },
       });
 
@@ -136,19 +138,8 @@ export async function POST(req: Request) {
         "Valor final"
       );
 
-    let grossCommission =
-      new Prisma.Decimal(0);
-
-    for (
-      const invoice
-      of stage.invoices
-    ) {
-      grossCommission =
-        grossCommission.plus(
-          invoice.grossAmount ||
-            0
-        );
-    }
+    const economics = stageInvoiceEconomics(stage);
+    let grossCommission = economics.gross;
 
     if (
       grossCommission.isZero()
@@ -160,35 +151,8 @@ export async function POST(req: Request) {
         );
     }
 
-    const taxes =
-      stage.invoices.flatMap(
-        (invoice) =>
-          invoice.taxEntries
-      );
-
-    const withheld =
-      taxes
-        .filter(
-          (tax) =>
-            tax.kind ===
-            "WITHHELD_AT_SOURCE"
-        )
-        .map(
-          (tax) =>
-            tax.amount
-        );
-
-    const payable =
-      taxes
-        .filter(
-          (tax) =>
-            tax.kind ===
-            "PAYABLE_BY_COMPANY"
-        )
-        .map(
-          (tax) =>
-            tax.amount
-        );
+    const withheld = [economics.withheld];
+    const payable = [economics.payable];
 
     const netAfterWithholding =
       calculateNetAfterWithholding({

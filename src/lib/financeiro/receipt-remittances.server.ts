@@ -1,5 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { allocateTaxCents } from "./invoice-economics.server";
 
 type Db = Prisma.TransactionClient | typeof prisma;
 
@@ -40,15 +41,40 @@ export async function availableIndividualInvoices(db: Db, tenantId: string, invo
   return invoices.flatMap((invoice) => {
     // An unlinked legacy receipt might already pay this invoice. Its allocation
     // cannot be established safely, so this invoice is unavailable here.
-    if (invoice.stage.receipts.length || !invoice.stage.sale.construtoraId) return [];
+    if (!invoice.stage || !invoice.stageId || invoice.stage.receipts.length || !invoice.stage.sale.construtoraId) return [];
     const gross = invoice.grossAmount ?? new Prisma.Decimal(0);
     const withheld = invoice.taxEntries
       .filter((tax) => tax.kind === "WITHHELD_AT_SOURCE")
       .reduce((sum, tax) => sum.plus(tax.amount ?? 0), new Prisma.Decimal(0));
     const { expected, balance } = invoiceCashBalance(gross, [withheld], invoice.receipts.map((receipt) => new Prisma.Decimal(receipt.amount ?? 0)));
     if (!balance.gt(0)) return [];
-    return [{ invoice, gross, withheld, expected, balance }];
+    return [{ invoice: { ...invoice, stageId: invoice.stageId, stage: invoice.stage }, gross, withheld, expected, balance }];
   });
+}
+
+export async function availableGroupedAllocations(db: Db, tenantId: string, pairs?: Array<{ invoiceId: string; stageId: string }>) {
+  const invoices = await db.financialInvoice.findMany({
+    where: { tenantId, stageId: null, status: "ISSUED", construtoraId: { not: null }, construtora: { tenantId },
+      ...(pairs ? { id: { in: pairs.map((item) => item.invoiceId) } } : {}) },
+    include: { construtora: true, taxEntries: { where: { status: { not: "CANCELLED" } } },
+      receipts: { where: { status: "CONFIRMED" } },
+      allocations: { include: { stage: { include: { sale: { include: { construtora: true, empreendimento: true } },
+        receipts: { where: { status: "CONFIRMED", invoiceId: null }, select: { id: true } } } } } } },
+    orderBy: { issuedAt: "asc" },
+  });
+  return invoices.flatMap((invoice) => invoice.allocations.flatMap((allocation) => {
+    if (pairs && !pairs.some((item) => item.invoiceId === invoice.id && item.stageId === allocation.stageId)) return [];
+    if (!invoice.construtoraId || allocation.stage.tenantId !== tenantId || allocation.stage.status === "CANCELLED"
+      || allocation.stage.sale.tenantId !== tenantId || allocation.stage.sale.status === "CANCELLED"
+      || allocation.stage.sale.construtoraId !== invoice.construtoraId || allocation.stage.receipts.length) return [];
+    const withheld = invoice.taxEntries.filter((tax) => tax.kind === "WITHHELD_AT_SOURCE")
+      .reduce((sum, tax) => sum.plus(allocateTaxCents(tax.amount, invoice.grossAmount, invoice.allocations).get(allocation.stageId) ?? 0), new Prisma.Decimal(0));
+    const received = invoice.receipts.filter((receipt) => receipt.stageId === allocation.stageId).map((receipt) => new Prisma.Decimal(receipt.amount ?? 0));
+    const gross = new Prisma.Decimal(allocation.amount);
+    const { expected, balance } = invoiceCashBalance(gross, [withheld], received);
+    if (!balance.gt(0)) return [];
+    return [{ invoice, allocation, gross, withheld, expected, balance }];
+  }));
 }
 
 export function parsePositiveMoney(value: unknown, label: string) {

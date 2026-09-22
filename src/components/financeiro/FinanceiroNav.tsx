@@ -20,6 +20,11 @@ const items = [
   },
 
   {
+    href: "/admin/financeiro/faturamento",
+    label: "Faturamento",
+  },
+
+  {
     href: "/admin/financeiro/recebimentos",
     label: "Recebimentos",
   },

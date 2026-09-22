@@ -5,6 +5,7 @@
 import { prisma } from "@/lib/prisma";
 
 import { getFinanceApiSession } from "@/lib/financeiro/access.server";
+import { assertOpenTaxCompetence } from "@/lib/financeiro/grouped-invoicing.server";
 
 import {
   errorMessage,
@@ -46,6 +47,9 @@ export async function POST(req: Request) {
 
         select: {
           id: true,
+          stageId: true,
+          competenceYear: true,
+          competenceMonth: true,
         },
       });
 
@@ -57,6 +61,10 @@ export async function POST(req: Request) {
         },
         { status: 404 }
       );
+    }
+    if (!invoice.stageId) {
+      if (!invoice.competenceYear || !invoice.competenceMonth) throw new Error("NF agrupada sem competência.");
+      await assertOpenTaxCompetence(prisma, tenantId, invoice.competenceYear, invoice.competenceMonth);
     }
 
     const kind =

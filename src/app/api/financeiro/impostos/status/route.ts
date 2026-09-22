@@ -18,6 +18,8 @@ import {
 import {
   refreshFinancialStageStatus,
 } from "@/lib/financeiro/stage-status.server";
+import { assertOpenTaxCompetence } from "@/lib/financeiro/grouped-invoicing.server";
+import { invoiceStageIds } from "@/lib/financeiro/invoice-economics.server";
 
 export async function POST(
   req: Request
@@ -87,6 +89,9 @@ export async function POST(
           invoice: {
             select: {
               stageId: true,
+              competenceYear: true,
+              competenceMonth: true,
+              allocations: { select: { stageId: true } },
             },
           },
         },
@@ -102,6 +107,10 @@ export async function POST(
           status: 404,
         }
       );
+    }
+    if (!tax.invoice.stageId) {
+      if (!tax.invoice.competenceYear || !tax.invoice.competenceMonth) throw new Error("NF agrupada sem competência.");
+      await assertOpenTaxCompetence(prisma, tenantId, tax.invoice.competenceYear, tax.invoice.competenceMonth);
     }
 
     if (
@@ -199,16 +208,12 @@ export async function POST(
               data,
             });
 
-          const stage =
-            await refreshFinancialStageStatus(
-              tx,
-              {
-                stageId:
-                  tax.invoice.stageId,
-
-                tenantId,
-              }
-            );
+          const stageIds = invoiceStageIds(tax.invoice);
+          const stages = [];
+          for (const stageId of stageIds) {
+            stages.push(await refreshFinancialStageStatus(tx, { stageId, tenantId }));
+          }
+          const stage = stages[0] ?? null;
 
           return {
             tax:

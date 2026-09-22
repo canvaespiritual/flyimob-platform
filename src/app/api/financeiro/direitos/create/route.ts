@@ -26,6 +26,7 @@ import {
 import {
   roundMoney,
 } from "@/lib/financeiro/money";
+import { stageInvoiceEconomics } from "@/lib/financeiro/invoice-economics.server";
 
 export async function POST(
   req: Request
@@ -97,6 +98,7 @@ export async function POST(
               },
             },
           },
+          invoiceAllocations: { include: { invoice: { include: { taxEntries: true, allocations: true } } } },
         },
       });
 
@@ -149,15 +151,8 @@ export async function POST(
         "Valor final"
       );
 
-    const grossFromInvoices =
-      stage.invoices.reduce(
-        (total, invoice) =>
-          total.plus(
-            invoice.grossAmount ||
-              0
-          ),
-        new Prisma.Decimal(0)
-      );
+    const economics = stageInvoiceEconomics(stage);
+    const grossFromInvoices = economics.gross;
 
     const grossCommission =
       grossFromInvoices.gt(0)
@@ -165,25 +160,8 @@ export async function POST(
         : stage.expectedGrossAmount ||
           0;
 
-    const withheld =
-      stage.invoices.flatMap(
-        (invoice) =>
-          invoice.taxEntries
-      ).filter(
-        (tax) =>
-          tax.kind ===
-          "WITHHELD_AT_SOURCE"
-      );
-
-    const payable =
-      stage.invoices.flatMap(
-        (invoice) =>
-          invoice.taxEntries
-      ).filter(
-        (tax) =>
-          tax.kind ===
-          "PAYABLE_BY_COMPANY"
-      );
+    const withheld = [economics.withheld];
+    const payable = [economics.payable];
 
     const netAfterWithholding =
       calculateNetAfterWithholding({
@@ -191,10 +169,7 @@ export async function POST(
           grossCommission,
 
         withheldTaxes:
-          withheld.map(
-            (tax) =>
-              tax.amount
-          ),
+          withheld,
       });
 
     const netAfterAllTaxes =
@@ -203,16 +178,10 @@ export async function POST(
           grossCommission,
 
         withheldTaxes:
-          withheld.map(
-            (tax) =>
-              tax.amount
-          ),
+          withheld,
 
         payableTaxes:
-          payable.map(
-            (tax) =>
-              tax.amount
-          ),
+          payable,
       });
 
     const calculatedAmount =

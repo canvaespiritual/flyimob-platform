@@ -3,6 +3,8 @@ import FinanceiroNav from "@/components/financeiro/FinanceiroNav";
 
 import { requireFinanceAccess } from "@/lib/financeiro/access.server";
 import { decimalToNumber } from "@/lib/financeiro/money";
+import { dashboardInvoicedProjection } from "@/lib/financeiro/calculations";
+import { stageInvoiceEconomics } from "@/lib/financeiro/invoice-economics.server";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
@@ -107,6 +109,8 @@ export default async function FinanceiroPage() {
           },
 
           select: {
+            id: true,
+            status: true,
             grossAmount:
               true,
 
@@ -119,7 +123,9 @@ export default async function FinanceiroPage() {
               },
 
               select: {
+                id: true,
                 kind: true,
+                status: true,
 
                 amount:
                   true,
@@ -128,6 +134,12 @@ export default async function FinanceiroPage() {
           },
         },
 
+        invoiceAllocations: { select: { amount: true, invoice: { select: {
+          id: true, status: true, grossAmount: true,
+          taxEntries: { select: { id: true, kind: true, status: true, amount: true } },
+          allocations: { select: { stageId: true, amount: true } },
+        } } } },
+
         receipts: {
           where: {
             status:
@@ -135,6 +147,7 @@ export default async function FinanceiroPage() {
           },
 
           select: {
+            status: true,
             amount:
               true,
           },
@@ -365,50 +378,10 @@ export default async function FinanceiroPage() {
       continue;
     }
 
-    let invoiceGross =
-      0;
-
-    let withheld =
-      0;
-
-    let payableTax =
-      0;
-
-    for (
-      const invoice
-      of stage.invoices
-    ) {
-      invoiceGross +=
-        number(
-          invoice.grossAmount
-        );
-
-      for (
-        const tax
-        of invoice.taxEntries
-      ) {
-        const taxAmount =
-          number(
-            tax.amount
-          );
-
-        if (
-          tax.kind ===
-          "WITHHELD_AT_SOURCE"
-        ) {
-          withheld +=
-            taxAmount;
-        }
-
-        if (
-          tax.kind ===
-          "PAYABLE_BY_COMPANY"
-        ) {
-          payableTax +=
-            taxAmount;
-        }
-      }
-    }
+    const projectionEconomics = stageInvoiceEconomics(stage);
+    const invoiceGross = Number(projectionEconomics.gross);
+    const withheld = Number(projectionEconomics.withheld);
+    const payableTax = Number(projectionEconomics.payable);
 
     /*
      * Sem NF emitida, essa etapa não serve como
@@ -469,8 +442,13 @@ export default async function FinanceiroPage() {
         companyNetKnown: 0,
       };
 
-    current.knownSharePercent +=
-      sharePercent;
+    current.knownSharePercent += dashboardInvoicedProjection({
+      sharePercent,
+      invoiceGross,
+      expectedGross: number(stage.expectedGrossAmount),
+      companyEconomicNet: companyNetKnown,
+      hasIssuedAllocation: stage.invoiceAllocations.some(({ invoice }) => invoice.status === "ISSUED"),
+    }).knownSharePercent;
 
     current.companyNetKnown +=
       companyNetKnown;
@@ -504,53 +482,10 @@ export default async function FinanceiroPage() {
     const stage
     of stages
   ) {
-    let invoiceGross =
-      0;
-
-    let withheld =
-      0;
-
-    let payableTax =
-      0;
-
-    /*
-     * Soma NF e impostos da etapa.
-     */
-    for (
-      const invoice
-      of stage.invoices
-    ) {
-      invoiceGross +=
-        number(
-          invoice.grossAmount
-        );
-
-      for (
-        const tax
-        of invoice.taxEntries
-      ) {
-        const taxAmount =
-          number(
-            tax.amount
-          );
-
-        if (
-          tax.kind ===
-          "WITHHELD_AT_SOURCE"
-        ) {
-          withheld +=
-            taxAmount;
-        }
-
-        if (
-          tax.kind ===
-          "PAYABLE_BY_COMPANY"
-        ) {
-          payableTax +=
-            taxAmount;
-        }
-      }
-    }
+    const stageEconomics = stageInvoiceEconomics(stage);
+    const invoiceGross = Number(stageEconomics.gross);
+    const withheld = Number(stageEconomics.withheld);
+    const payableTax = Number(stageEconomics.payable);
 
     /*
      * Recebimentos confirmados.
@@ -718,6 +653,14 @@ export default async function FinanceiroPage() {
           companyEconomicNet *
           outstandingRatio;
       }
+
+      futureProjectedNet += dashboardInvoicedProjection({
+        sharePercent: number(stage.commissionSharePercent),
+        invoiceGross,
+        expectedGross: number(stage.expectedGrossAmount),
+        companyEconomicNet,
+        hasIssuedAllocation: stage.invoiceAllocations.some(({ invoice }) => invoice.status === "ISSUED"),
+      }).futureProjectedNet;
 
       continue;
     }

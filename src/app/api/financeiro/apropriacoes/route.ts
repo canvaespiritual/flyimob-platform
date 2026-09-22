@@ -21,6 +21,7 @@ import {
 import {
   refreshFinancialStageStatus,
 } from "@/lib/financeiro/stage-status.server";
+import { stageInvoiceEconomics } from "@/lib/financeiro/invoice-economics.server";
 
 function number(
   value: unknown
@@ -127,6 +128,7 @@ export async function POST(
                       true,
                   },
                 },
+                invoiceAllocations: { include: { invoice: { include: { taxEntries: true, allocations: true } } } },
 
                 entitlements: {
                   include: {
@@ -210,36 +212,7 @@ export async function POST(
                 0
               );
 
-          const taxes =
-            stage.invoices.flatMap(
-              (invoice) =>
-                invoice.taxEntries
-            );
-
-          const taxSeparated =
-            taxes
-              .filter(
-                (tax) =>
-                  tax.kind ===
-                    "PAYABLE_BY_COMPANY" &&
-                  (
-                    tax.status ===
-                      "SEPARATED" ||
-                    tax.status ===
-                      "PAID"
-                  )
-              )
-              .reduce(
-                (
-                  total,
-                  tax
-                ) =>
-                  total +
-                  number(
-                    tax.amount
-                  ),
-                0
-              );
+          const taxSeparated = Number(stageInvoiceEconomics(stage, { includeNonIssuedSeparatedTaxes: true }).payableSeparated);
 
           const paid =
             stage.entitlements.reduce(

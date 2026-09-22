@@ -56,6 +56,7 @@ export default function ReceiptCard({
   receipts,
   grossInvoiced,
   withheldTaxes,
+  allowCreate = true,
 }: {
   stageId: string;
 
@@ -64,6 +65,7 @@ export default function ReceiptCard({
   grossInvoiced: number;
 
   withheldTaxes: number;
+  allowCreate?: boolean;
 }) {
   const router =
     useRouter();
@@ -375,7 +377,7 @@ export default function ReceiptCard({
           </div>
         </div>
 
-        <button
+        {allowCreate ? <button
           type="button"
           onClick={() => {
             setEditingId(null);
@@ -384,7 +386,7 @@ export default function ReceiptCard({
           className="rounded-md border px-3 py-2 text-sm"
         >
           Registrar entrada
-        </button>
+        </button> : <Link className="text-sm text-blue-700 underline" href="/admin/financeiro/recebimentos">Receber pela central de remessas</Link>}
       </div>
 
       {creating &&

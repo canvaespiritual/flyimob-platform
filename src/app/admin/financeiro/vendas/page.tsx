@@ -7,6 +7,7 @@ import SalesOverviewTable, {
 } from "@/components/financeiro/SalesOverviewTable";
 
 import { requireFinanceAccess } from "@/lib/financeiro/access.server";
+import { allocateTaxCents } from "@/lib/financeiro/invoice-economics.server";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic =
@@ -137,28 +138,16 @@ async function loadSales(
         ? {
             stages: {
               some: {
-                invoices: {
-                  some: {
-                    status:
-                      "ISSUED",
-
-                    issuedAt: {
-                      ...(filters.from
-                        ? {
-                            gte:
-                              filters.from,
-                          }
-                        : {}),
-
-                      ...(filters.to
-                        ? {
-                            lte:
-                              filters.to,
-                          }
-                        : {}),
-                    },
-                  },
-                },
+                OR: [
+                  { invoices: { some: { status: "ISSUED", issuedAt: {
+                    ...(filters.from ? { gte: filters.from } : {}),
+                    ...(filters.to ? { lte: filters.to } : {}),
+                  } } } },
+                  { invoiceAllocations: { some: { invoice: { status: "ISSUED", issuedAt: {
+                    ...(filters.from ? { gte: filters.from } : {}),
+                    ...(filters.to ? { lte: filters.to } : {}),
+                  } } } } },
+                ],
               },
             },
           }
@@ -205,6 +194,8 @@ async function loadSales(
                 true,
             },
           },
+
+          invoiceAllocations: { include: { invoice: { include: { taxEntries: true, allocations: true } } } },
 
           receipts: {
             orderBy: {
@@ -281,7 +272,14 @@ function stageData(
   attachmentKeys: Set<string>
 ): SalesOverviewStage {
   const issuedInvoices =
-    stage.invoices.filter(
+    [...stage.invoices, ...stage.invoiceAllocations.map((allocation) => ({
+      ...allocation.invoice,
+      grossAmount: allocation.amount,
+      taxEntries: allocation.invoice.taxEntries.map((tax) => ({ ...tax,
+        amount: allocateTaxCents(tax.amount, allocation.invoice.grossAmount,
+          allocation.invoice.allocations).get(stage.id) ?? tax.amount,
+      })),
+    }))].filter(
       (invoice) =>
         invoice.status ===
         "ISSUED"
@@ -972,7 +970,13 @@ function projectionReference(
     of mainStages
   ) {
     const invoices =
-      stage.invoices.filter(
+      [...stage.invoices, ...stage.invoiceAllocations.map((allocation) => ({
+        ...allocation.invoice, grossAmount: allocation.amount,
+        taxEntries: allocation.invoice.taxEntries.map((tax) => ({ ...tax,
+          amount: allocateTaxCents(tax.amount, allocation.invoice.grossAmount,
+            allocation.invoice.allocations).get(stage.id) ?? tax.amount,
+        })),
+      }))].filter(
         (invoice) =>
           invoice.status ===
           "ISSUED"
@@ -1158,7 +1162,7 @@ function buildSaleRow(
     maxDate(
       sale.stages.flatMap(
         (stage) =>
-          stage.invoices
+          [...stage.invoices, ...stage.invoiceAllocations.map((allocation) => allocation.invoice)]
             .filter(
               (invoice) =>
                 invoice.status ===
@@ -1466,7 +1470,7 @@ export default async function VendasPage({
 const invoiceIds =
   rawSales.flatMap((sale) =>
     sale.stages.flatMap((stage) =>
-      stage.invoices.map((invoice) => invoice.id)
+      [...stage.invoices.map((invoice) => invoice.id), ...stage.invoiceAllocations.map((allocation) => allocation.invoiceId)]
     )
   );
 

@@ -55,6 +55,12 @@ type Props = {
       }>;
     }>;
 
+    groupedInvoices: Array<{
+      id: string; number: string | null; grossAmount: number; totalGrossAmount: number; status: string;
+      taxEntries: Array<{ id: string; invoiceId: string; name: string; kind: string;
+        rate: number | null; amount: number | null; status: string }>;
+    }>;
+
     receipts: Array<{
       id: string;
       amount: number | null;
@@ -178,7 +184,7 @@ const [
   >(null);
 
   const taxes =
-    stage.invoices.flatMap(
+    [...stage.invoices, ...stage.groupedInvoices].flatMap(
       (invoice) =>
         invoice.taxEntries
     );
@@ -195,7 +201,7 @@ const [
   // =========================
 
   const invoiceGross =
-    stage.invoices
+    [...stage.invoices, ...stage.groupedInvoices]
       .filter(
         (invoice) =>
           invoice.status ===
@@ -899,6 +905,15 @@ async function redistributeRemaining() {
           }
         />
 
+        {stage.groupedInvoices.length > 0 && <div className="space-y-2 rounded border bg-blue-50 p-3 text-sm">
+          <strong>Faturamento agrupado</strong>
+          {stage.groupedInvoices.map((invoice) => <div key={invoice.id}>
+            NF {invoice.number ?? "sem número"} · Parcela desta etapa: {formatBRL(invoice.grossAmount)}
+            <span className="ml-2 text-gray-600">Bruto total da NF: {formatBRL(invoice.totalGrossAmount)}</span>
+            <div><a className="text-blue-700 underline" href={`/admin/financeiro/faturamento?invoiceId=${invoice.id}#nf-${invoice.id}`}>Ver composição e documento</a></div>
+          </div>)}
+        </div>}
+
         {/* 2. IMPOSTOS */}
 
         <TaxCard
@@ -920,7 +935,7 @@ async function redistributeRemaining() {
             })
           )}
           taxes={
-            taxes
+            stage.invoices.flatMap((invoice) => invoice.taxEntries)
           }
         />
 
@@ -930,6 +945,7 @@ async function redistributeRemaining() {
           stageId={
             stage.id
           }
+          allowCreate={stage.groupedInvoices.filter((invoice) => invoice.status === "ISSUED").length === 0}
           receipts={
             stage.receipts
           }
