@@ -1502,6 +1502,52 @@ export async function POST(
             );
           }
 
+          /* Snapshot documental: comissões brutas, vales e PIX permanecem separados. */
+          if (paymentId) {
+            let displayOrder = 0;
+            await tx.financialSettlement.create({
+              data: {
+                tenantId,
+                participantId,
+                number: `REM-${paymentId}`,
+                periodStart: paidAt,
+                periodEnd: paidAt,
+                status: "FINALIZED",
+                grossEntitlementsAmount: new Prisma.Decimal(totalRights),
+                creditsAmount: new Prisma.Decimal(0),
+                debitsAmount: new Prisma.Decimal(totalRequestedAdjustments),
+                paymentsAmount: new Prisma.Decimal(pixAmount),
+                netAmount: new Prisma.Decimal(pixAmount),
+                finalizedAt: paidAt,
+                notes,
+                createdById: auth.session.user.id,
+                items: { create: [
+                  ...entitlementDistribution.map((item) => ({
+                    type: "ENTITLEMENT" as const,
+                    entitlementId: item.entitlement.id,
+                    description: item.entitlement.stage.sale.clientName,
+                    amount: new Prisma.Decimal(item.originalBalance),
+                    displayOrder: displayOrder++,
+                  })),
+                  ...adjustmentState.map((adjustment) => ({
+                    type: "ADJUSTMENT" as const,
+                    adjustmentId: adjustment.id,
+                    description: adjustment.description,
+                    amount: new Prisma.Decimal(adjustment.requested),
+                    displayOrder: displayOrder++,
+                  })),
+                  {
+                    type: "PAYMENT" as const,
+                    paymentId,
+                    description: "PIX pago ao participante",
+                    amount: new Prisma.Decimal(pixAmount),
+                    displayOrder: displayOrder++,
+                  },
+                ] },
+              },
+            });
+          }
+
           /*
            * Recalcula status das etapas afetadas.
            */

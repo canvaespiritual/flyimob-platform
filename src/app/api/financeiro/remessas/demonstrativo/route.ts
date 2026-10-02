@@ -3,6 +3,7 @@ import {
   buildRemittancePdf,
   RemittancePdfOptions,
 } from "@/lib/financeiro/remittance-pdf.server";
+import { loadRemittanceSettlement } from "@/lib/financeiro/remittance-settlement.server";
 import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
@@ -520,6 +521,9 @@ export async function POST(
       );
     }
 
+    const settlement = await loadRemittanceSettlement(tenantId, payment.id);
+    const statementAllocations = settlement?.entitlements ?? payment.allocations;
+
     /*
      * Reúne os vales efetivamente ligados
      * aos direitos que fazem parte desta remessa.
@@ -550,9 +554,19 @@ export async function POST(
         }
       >();
 
+    if (settlement) {
+      for (const adjustment of settlement.adjustments) {
+        adjustmentMap.set(adjustment.id, {
+          ...adjustment,
+          originalAmount: num(adjustment.originalAmount),
+          appliedInRemittance: num(adjustment.appliedInRemittance),
+        });
+      }
+    }
+
     for (
       const allocation
-      of payment.allocations
+      of settlement ? [] : statementAllocations
     ) {
       for (
         const adjustmentAllocation
@@ -760,7 +774,7 @@ export async function POST(
       );
 
     const items =
-      payment.allocations.map(
+      statementAllocations.map(
         (
           allocation
         ) => {
@@ -1023,9 +1037,9 @@ export async function POST(
                 : null,
 
             entitlementFinalAmount:
-              num(
-                entitlement.finalAmount
-              ),
+              settlement
+                ? num(allocation.amount)
+                : num(entitlement.finalAmount),
 
             pixAllocation:
               num(

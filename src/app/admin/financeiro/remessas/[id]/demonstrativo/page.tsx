@@ -16,6 +16,7 @@ import {
 import {
   prisma,
 } from "@/lib/prisma";
+import { loadRemittanceSettlement } from "@/lib/financeiro/remittance-settlement.server";
 
 export const dynamic =
   "force-dynamic";
@@ -226,6 +227,9 @@ export default async function DemonstrativoRemessaPage({
     notFound();
   }
 
+  const settlement = await loadRemittanceSettlement(tenantId, payment.id);
+  const statementAllocations = settlement?.entitlements ?? payment.allocations;
+
   /*
    * Busca os direitos deste mesmo
    * participante em todas as etapas
@@ -237,7 +241,7 @@ export default async function DemonstrativoRemessaPage({
   const allStageIds =
     Array.from(
       new Set(
-        payment.allocations.flatMap(
+        statementAllocations.flatMap(
           (
             allocation
           ) =>
@@ -350,9 +354,19 @@ export default async function DemonstrativoRemessaPage({
       }
     >();
 
+  if (settlement) {
+    for (const adjustment of settlement.adjustments) {
+      adjustmentMap.set(adjustment.id, {
+        ...adjustment,
+        originalAmount: num(adjustment.originalAmount),
+        appliedInRemittance: num(adjustment.appliedInRemittance),
+      });
+    }
+  }
+
   for (
     const allocation
-    of payment.allocations
+    of settlement ? [] : statementAllocations
   ) {
     for (
       const adjustmentAllocation
@@ -550,7 +564,7 @@ export default async function DemonstrativoRemessaPage({
         payment.destinationHolderName,
 
       items:
-        payment.allocations.map(
+        statementAllocations.map(
           (
             allocation
           ) => {
@@ -760,9 +774,9 @@ export default async function DemonstrativoRemessaPage({
                   : null,
 
               entitlementFinalAmount:
-                num(
-                  entitlement.finalAmount
-                ),
+                settlement
+                  ? num(allocation.amount)
+                  : num(entitlement.finalAmount),
 
               pixAllocation:
                 num(
