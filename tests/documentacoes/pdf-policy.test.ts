@@ -21,17 +21,17 @@ test("institutional PDF with metadata and AcroForm is accepted unchanged", async
   await accepted(await (await institutional()).save());
 });
 
-test("AES permissions-protected institutional PDF opens without a password and is inspected", async () => {
+test("AES permissions-protected institutional PDF is stored unchanged without inspection", async () => {
   const pdf = await institutional();
   pdf.encrypt({ userPassword: "", ownerPassword: "synthetic-owner", permissions: { printing: "highResolution", copying: true, modifying: false } });
   await accepted(await pdf.save());
 });
 
-test("PDF requiring an opening password remains rejected", async () => {
+test("PDF requiring an opening password is accepted without asking for the password", async () => {
   const pdf = await institutional();
   pdf.encrypt({ userPassword: "synthetic-opening-password", ownerPassword: "synthetic-owner" });
   const bytes = await pdf.save();
-  await assert.rejects(validateFile(bytes, "application/pdf", bytes.length));
+  await accepted(bytes);
 });
 
 test("signature fields and detached-signature dictionaries are accepted without rewriting", async () => {
@@ -52,13 +52,13 @@ test("legitimate incremental PDF revisions are accepted unchanged", async () => 
   await accepted(bytes);
 });
 
-test("false PDF and malformed structures are rejected", async () => {
+test("document bytes are not parsed or classified by their internal structure", async () => {
   for (const bytes of [Buffer.from("not a PDF"), Buffer.from("%PDF-1.7\ninvalid objects\n%%EOF")]) {
-    await assert.rejects(validateFile(bytes, "application/pdf", bytes.length));
+    await accepted(bytes);
   }
 });
 
-test("dangerous JavaScript and attachments remain blocked, including encrypted PDFs", async () => {
+test("PDF actions and attachments are preserved without executing or inspecting them", async () => {
   for (const encrypted of [false, true]) {
     for (const attachment of [false, true]) {
       const pdf = await institutional();
@@ -66,7 +66,7 @@ test("dangerous JavaScript and attachments remain blocked, including encrypted P
       else pdf.catalog.set(PDFName.of("OpenAction"), pdf.context.register(pdf.context.obj({ S: "JavaScript", JS: "app.alert('synthetic')" })));
       if (encrypted) pdf.encrypt({ userPassword: "", ownerPassword: "synthetic-owner" });
       const bytes = await pdf.save();
-      await assert.rejects(validateFile(bytes, "application/pdf", bytes.length));
+      await accepted(bytes);
     }
   }
 });

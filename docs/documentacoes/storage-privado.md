@@ -27,12 +27,12 @@ Preview/download também passam pelo backend autenticado. O objeto é lido de fo
 1. POST de início valida sessão, tenant, role, pasta/atribuição, version, pessoa, tipo ativo, nome/extensão/MIME/tamanho e configuração privada.
 2. Na transação, incrementa version, cria PROCESSING com chave própria e registra DOCUMENT_UPLOAD_STARTED. Até 30 autorizações recentes podem estar pendentes por pasta.
 3. PUT de bytes exige o uploader original, sessão/atribuição atual e PROCESSING não expirado. Leitura incremental interrompe acima do tamanho autorizado, mesmo sem Content-Length.
-4. Conteúdo passa por assinatura e parser/decoder: PDF via pdf-lib, PNG/JPEG via sharp, limite de 20 milhões de pixels, uma imagem por arquivo. PDF protegido, sem páginas, com mais de 2000 páginas, ações JavaScript/Launch/OpenAction/AA, anexos, XFA/RichMedia ou estrutura inválida é recusado. SVG/HTML/Office/ZIP/WebP não são aceitos nesta V1.
+4. Conteúdo não é interpretado, decodificado, convertido ou sanitizado. A definição compartilhada em `file-formats.ts` permite PDF, JPG/JPEG, PNG, WEBP, HEIC/HEIF, GIF, BMP e TIF/TIFF. PDF com senha, criptografia, assinatura, formulário, actions, anexos e estrutura incomum é aceito. Vídeos, executáveis e formatos fora desse conjunto são recusados pela extensão/MIME, sem inspeção interna.
 5. SHA-256 é calculado pelo servidor; PutObject usa escrita condicional e metadata opaca da autorização e checksum, sem nome original/CPF no objeto.
 6. Finalizar recebe documentId/version, nunca storageKey. HEAD confirma tamanho, MIME, documentId, tenant, folder, uploader e checksum. GET condicional ao ETag lê o mesmo objeto, com tamanho limitado. Bytes são novamente validados e SHA-256 confirmado.
 7. Nova transação revalida pasta/atribuição/estado/referências/versão, ativa o documento e registra DOCUMENT_ADDED. Finalize já ACTIVE do mesmo uploader é idempotente. Falha de evento aborta alteração do banco.
 
-Formato e tamanho declarados não bastam para ativar um arquivo. Não há antivírus/CDR nesta etapa: parser, magic bytes, restrição de formatos e bloqueio de ações PDF reduzem risco, mas não garantem ausência de todo malware ou vulnerabilidade de visualizador.
+A ativação confirma tamanho, autorização e integridade SHA-256 dos bytes armazenados. Não há parser, decoder, antivírus ou CDR no caminho de upload/download; conteúdo incorporado não é executado pelo servidor. O arquivo original permanece byte a byte no storage.
 
 ## Autorizações e concorrência
 
@@ -59,7 +59,7 @@ Envios sequenciais limitam pressão de memória e permitem atualizar version ent
 
 Fila fica em memória; recarregar/fechar a página perde arquivos locais não concluídos. Upload com objeto já recebido pode ser finalizado novamente; admin vê pendentes próprios no histórico e possui ação de tentar finalizar. Autorizações expiradas reiniciam no próximo retry, mantendo arquivo e classificação na fila. Não há drag-and-drop, câmera/scanner ou classificação automática.
 
-Documentos são organizados por pessoa, com categoria, nome, tamanho, remetente, role/origem, data e status. Listagem pagina 30 documentos e identifica quando não há arquivo na página; não carrega tudo indefinidamente. Preview abre nova aba com viewer nativo do navegador; download usa disposition sanitizada. PDFs não recebem CSP sandbox porque esse header pode bloquear o viewer nativo do Chromium; imagens mantêm sandbox. Ações PDF perigosas são recusadas pelo parser. Referência: [issue oficial Chromium](https://issues.chromium.org/issues/40754148).
+Documentos são organizados por pessoa, com categoria, nome, tamanho, remetente, role/origem, data e status. Listagem pagina 30 documentos e identifica quando não há arquivo na página; não carrega tudo indefinidamente. Preview abre nova aba com viewer nativo do navegador; download usa disposition sanitizada. PDFs não recebem CSP sandbox porque esse header pode bloquear o viewer nativo do Chromium; imagens mantêm sandbox. A visualização é best-effort, não muda o status e não invalida documentos. HEIC/HEIF/TIFF são oferecidos como download autenticado para abertura externa. Para PDF/imagens compatíveis, a interface também informa como baixar quando o navegador não conseguir renderizar. Senhas de PDF são solicitadas pelo visualizador, se suportado, nunca pelo upload. Referência: [issue oficial Chromium](https://issues.chromium.org/issues/40754148).
 
 ## Endpoints
 

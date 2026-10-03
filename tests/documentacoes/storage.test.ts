@@ -13,6 +13,7 @@ import { MAX_DOCUMENT_BYTES, fileMetadata, validateFile, disposition, readUpload
 import { documentationStorage, type DocumentationStorage, type StoredDocument } from "../../src/lib/documentacoes/storage.server";
 import { documentScope, sameOrigin } from "../../src/lib/documentacoes/document-access.server";
 import { DocumentationError } from "../../src/lib/documentacoes/validation";
+import { DOCUMENT_FORMATS } from "../../src/lib/documentacoes/file-formats";
 import type { DocumentationViewer } from "../../src/lib/documentacoes/access-policy";
 import { POST as begin, GET as list } from "../../src/app/api/documentacoes/pastas/[id]/documentos/route";
 import { PUT as upload } from "../../src/app/api/documentacoes/pastas/[id]/documentos/[documentId]/upload/route";
@@ -59,12 +60,12 @@ test("MIME, extension, size and sanitized disposition reject unsafe input", () =
   assert.equal(fileMetadata({ ...body(10), originalFileName: "../../test.png" }).originalFileName, "test.png");
   assert.throws(() => disposition("x\r\nSet-Cookie: bad.png", true)); assert.match(disposition("João.png", true), /^attachment; filename="Jo_o.png"; filename\*=UTF-8''/);
 });
-test("valid PDF/PNG/JPEG are decoded; false magic, corrupted and active PDF rejected", async () => {
+test("PDF/PNG/JPEG bytes and PDF actions are preserved without decoding", async () => {
   const png = await image(); assert.match(await validateFile(png, "image/png", png.length), /^[a-f0-9]{64}$/);
   const jpeg = await sharp(png).jpeg().toBuffer(); assert.ok(await validateFile(jpeg, "image/jpeg", jpeg.length));
   const pdf = await PDFDocument.create(); pdf.addPage(); const bytes = await pdf.save(); assert.ok(await validateFile(bytes, "application/pdf", bytes.length));
-  for (const [data, mime] of [[Buffer.from("<html>not image</html>"), "image/png"], [png, "image/jpeg"], [png.subarray(0, png.length - 1), "image/png"]] as const) await assert.rejects(validateFile(data, mime, data.length));
-  pdf.catalog.set(PDFName.of("OpenAction"), PDFName.of("JavaScript")); const unsafe = await pdf.save(); await assert.rejects(validateFile(unsafe, "application/pdf", unsafe.length), /conteúdo não permitido/);
+  for (const [data, mime] of [[Buffer.from("unrenderable image"), "image/png"], [png, "image/jpeg"], [png.subarray(0, png.length - 1), "image/png"]] as const) assert.match(await validateFile(data, mime, data.length), /^[a-f0-9]{64}$/);
+  pdf.catalog.set(PDFName.of("OpenAction"), PDFName.of("JavaScript")); const original = await pdf.save(); assert.match(await validateFile(original, "application/pdf", original.length), /^[a-f0-9]{64}$/);
 });
 test("bounded request reading rejects over-limit and incomplete streams", async () => {
   const request = (bytes: number) => new Request("https://local.test/upload", { method: "PUT", body: new Uint8Array(bytes) });
@@ -131,7 +132,7 @@ test("missing or incompatible storage never activates document", async () => {
 });
 test("upload validates bytes before storage and cannot be finalized by another uploader", async () => {
   const h = harness(); const bytes = await image(); const result = await beginUpload(owner, "folder-a", body(bytes.length), h.db, h.storage);
-  await assert.rejects(uploadDocument(owner, "folder-a", result.id, Buffer.alloc(bytes.length), h.db, h.storage)); assert.equal(h.objects.size, 0);
+  await assert.rejects(uploadDocument(owner, "folder-a", result.id, Buffer.alloc(bytes.length - 1), h.db, h.storage)); assert.equal(h.objects.size, 0);
   await assert.rejects(uploadDocument(correspondent, "folder-a", result.id, bytes, h.db, h.storage));
   await assert.rejects(finalizeUpload(correspondent, "folder-a", result.id, { version: 1 }, h.db, h.storage));
 });
@@ -267,9 +268,10 @@ test("authenticated content endpoint emits protected headers and never a storage
   assert.equal(response.status, 200); assert.match(response.headers.get("content-disposition")!, /^attachment/); assert.match(response.headers.get("cache-control")!, /no-store/); assert.equal(response.headers.get("x-content-type-options"), "nosniff"); assert.equal(response.headers.get("location"), null); assert.ok((await response.arrayBuffer()).byteLength);
   assert.match(response.headers.get("content-security-policy")!, /sandbox/);
 });
-test("PDF preview keeps authenticated private headers without sandbox that blocks native viewer", async t => {
-  const h = harness(); const pdf = await PDFDocument.create(); pdf.addPage(); const bytes = await pdf.save();
-  const started = await beginUpload(owner, "folder-a", { ...body(bytes.length), originalFileName: "synthetic.pdf", mimeType: "application/pdf" }, h.db, h.storage);
+test("best-effort preview and authenticated external download preserve ACTIVE status and bytes", async t => {
+  for (const [mimeType, extension] of [["application/pdf", "pdf"], ["image/heic", "heic"], ["image/png", "png"]]) {
+  const h = harness(); const bytes = Buffer.from("synthetic unrenderable document preserved as uploaded");
+  const started = await beginUpload(owner, "folder-a", { ...body(bytes.length), originalFileName: `synthetic.${extension}`, mimeType }, h.db, h.storage);
   await uploadDocument(owner, "folder-a", started.id, bytes, h.db, h.storage); await finalizeUpload(owner, "folder-a", started.id, { version: 1 }, h.db, h.storage);
   const row = h.documents.get(started.id)!; const object = h.objects.get(row.storageKey)!; env(t, "synthetic-documentation-private");
   mock(t, prisma.user, "findFirst", async () => ({ id: owner.user.id, tenantId: "tenant-a", role: "OWNER", isActive: true, sessionVersion: 0, name: "Synthetic", email: "synthetic@example.invalid", tenant: { id: "tenant-a", name: "Synthetic", slug: "synthetic", parentId: null, isPlatform: false } }));
@@ -282,5 +284,23 @@ test("PDF preview keeps authenticated private headers without sandbox that block
   });
   const token = createSessionToken({ uid: owner.user.id, tid: "tenant-a", role: "OWNER", sv: 0 });
   const response = await requestContext(token, () => content(new Request("https://local.test/file"), { params: Promise.resolve({ id: "folder-a", documentId: row.id }) }));
-  assert.equal(response.status, 200); assert.equal(response.headers.get("content-type"), "application/pdf"); assert.match(response.headers.get("content-disposition")!, /^inline/); assert.equal(response.headers.get("content-security-policy")!.includes("sandbox"), false); assert.match(response.headers.get("cache-control")!, /no-store/); assert.equal((await response.arrayBuffer()).byteLength, bytes.length);
+  assert.equal(response.status, 200); assert.equal(response.headers.get("content-type"), mimeType);
+  assert.match(response.headers.get("content-disposition")!, mimeType === "image/heic" ? /^attachment/ : /^inline/);
+  assert.equal(response.headers.get("content-security-policy")!.includes("sandbox"), mimeType !== "application/pdf");
+  assert.match(response.headers.get("cache-control")!, /no-store/);
+  assert.ok(Buffer.from(await response.arrayBuffer()).equals(bytes));
+  assert.equal(row.status, "ACTIVE");
+  }
 });
+
+for (const format of DOCUMENT_FORMATS) {
+  test(`document storage preserves ${format.mime} bytes through upload, finalize and download`, async () => {
+    const h = harness(); const bytes = Buffer.from("synthetic original document bytes");
+    const started = await beginUpload(owner, "folder-a", { ...body(bytes.length), originalFileName: `synthetic.${format.extensions[0]}`, mimeType: format.mime }, h.db, h.storage);
+    await uploadDocument(owner, "folder-a", started.id, bytes, h.db, h.storage);
+    await finalizeUpload(owner, "folder-a", started.id, { version: 1 }, h.db, h.storage);
+    const downloaded = await documentContent(owner, "folder-a", started.id, h.db, h.storage);
+    assert.ok(Buffer.from(downloaded.bytes).equals(bytes));
+    assert.equal(h.documents.get(started.id)!.status, "ACTIVE");
+  });
+}
