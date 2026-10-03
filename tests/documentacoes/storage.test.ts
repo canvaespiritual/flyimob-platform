@@ -76,6 +76,38 @@ test("document access is assignment-scoped without granting analysis/admin acces
   for (const denied of [{ ...owner, user: { ...owner.user, role: "MANAGER" as const } }, { ...owner, tenant: { ...owner.tenant, isPlatform: true } }, { ...correspondent, user: { ...correspondent.user, tenantId: "foreign" } }]) assert.throws(() => documentScope(denied));
   assert.throws(() => sameOrigin(new Request("https://local.test/api", { headers: { origin: "https://evil.test" } })));
 });
+test("public FlyImob origin is allowed behind an internal proxy URL", t => {
+  const before = process.env.APP_URL;
+  process.env.APP_URL = "https://flyimob.com/";
+  t.after(() => { if (before === undefined) delete process.env.APP_URL; else process.env.APP_URL = before; });
+  for (const origin of ["https://flyimob.com", "https://www.flyimob.com"]) {
+    for (const method of ["POST", "PUT"]) {
+      assert.doesNotThrow(() => sameOrigin(new Request("http://localhost:8080/api/documentacoes/pastas/folder-a/documentos", { method, headers: { origin, "sec-fetch-site": "same-origin" } })));
+    }
+  }
+});
+
+test("external, insecure, malformed and spoofed origins remain blocked", t => {
+  const before = process.env.APP_URL;
+  process.env.APP_URL = "https://flyimob.com";
+  t.after(() => { if (before === undefined) delete process.env.APP_URL; else process.env.APP_URL = before; });
+  for (const origin of ["https://evil.test", "http://flyimob.com", "https://flyimob.com.evil.test", "https://other.flyimob.com", "null", "https://flyimob.com:444", "https://flyimob.com/path"]) {
+    assert.throws(() => sameOrigin(new Request("http://localhost:8080/api", { headers: { origin, host: "evil.test", "x-forwarded-host": "evil.test", "x-forwarded-proto": "https" } })), DocumentationError);
+  }
+  assert.throws(() => sameOrigin(new Request("http://localhost:8080/api", { headers: { origin: "https://flyimob.com", "sec-fetch-site": "cross-site" } })), DocumentationError);
+  assert.throws(() => sameOrigin(new Request("https://evil.test/api", { headers: { origin: "https://evil.test" } })), DocumentationError);
+});
+
+test("local same-origin fallback works only without a configured public URL", t => {
+  const before = process.env.APP_URL;
+  delete process.env.APP_URL;
+  t.after(() => { if (before === undefined) delete process.env.APP_URL; else process.env.APP_URL = before; });
+  assert.doesNotThrow(() => sameOrigin(new Request("http://localhost:3000/api", { headers: { origin: "http://localhost:3000" } })));
+  assert.throws(() => sameOrigin(new Request("http://localhost:3000/api", { headers: { origin: "http://localhost:3001" } })), DocumentationError);
+  process.env.APP_URL = "not a URL";
+  assert.throws(() => sameOrigin(new Request("http://localhost:3000/api", { headers: { origin: "http://localhost:3000" } })), DocumentationError);
+});
+
 test("authorization rejects arbitrary key, foreign person/type/folder/tenant/correspondent", async () => {
   const h = harness(); const png = await image();
   for (const value of [{ ...body(png.length), storageKey: "foreign-key" }, { ...body(png.length), personId: "foreign" }, { ...body(png.length), documentTypeId: "foreign" }]) await assert.rejects(beginUpload(owner, "folder-a", value, h.db, h.storage));
