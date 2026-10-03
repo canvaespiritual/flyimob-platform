@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { PDFDocument, PDFDict, PDFArray, PDFStream, PDFName, PDFObject } from "pdf-lib";
+import { PDFDocument, PDFDict, PDFArray, PDFStream, PDFName, PDFObject, PDFInvalidObject } from "@cantoo/pdf-lib";
 import sharp from "sharp";
 import { DocumentationError, integer, text } from "./validation";
 
@@ -33,7 +33,25 @@ export async function validateFile(bytes: Uint8Array, mimeType: string, expected
   try {
     if (mimeType === "application/pdf") {
       if (!buffer.subarray(0, 8).toString("ascii").startsWith("%PDF-") || !/%%EOF\s*$/.test(buffer.subarray(-1024).toString("latin1"))) throw new Error("pdf signature");
-      const pdf = await PDFDocument.load(buffer, { ignoreEncryption: false, throwOnInvalidObject: true });
+      // Permissions encryption is not an opening password. The first parse
+      // discovers encryption; encrypted object streams require the second pass.
+      const original = await PDFDocument.load(buffer, { ignoreEncryption: true, throwOnInvalidObject: false, updateMetadata: false });
+      const pdf = original.isEncrypted
+        ? await PDFDocument.load(buffer, { password: "", ignoreEncryption: false, throwOnInvalidObject: false, updateMetadata: false })
+        : original;
+      if (original.isEncrypted && !pdf.context.isDecrypted) throw new Error("pdf not decrypted");
+      for (const [ref, object] of original.context.enumerateIndirectObjects()) {
+        if (object instanceof PDFInvalidObject && (!original.isEncrypted || pdf.context.lookup(ref) instanceof PDFInvalidObject || !pdf.context.lookup(ref))) throw new Error("pdf invalid object");
+      }
+      for (const [ref, object] of pdf.context.enumerateIndirectObjects()) {
+        if (!(object instanceof PDFInvalidObject)) continue;
+        const source = original.context.lookup(ref);
+        // Cross-reference streams are deliberately unencrypted in the PDF spec.
+        // The decrypting parser can misread their trailer /ID as ciphertext.
+        // Permit only a strictly parsed original XRef stream, inspected below;
+        // never skip invalid page, action, form or embedded-content objects.
+        if (!(source instanceof PDFStream) || source.dict.get(PDFName.of("Type")) !== PDFName.of("XRef")) throw new Error("pdf invalid object");
+      }
       if (!pdf.getPageCount() || pdf.getPageCount() > 2000) throw new Error("pdf pages");
       const visited = new Set<PDFObject>();
       const forbidden = new Set(["JS", "JavaScript", "AA", "OpenAction", "Launch", "EmbeddedFiles", "EmbeddedFile", "RichMedia", "XFA"]);
@@ -45,6 +63,7 @@ export async function validateFile(bytes: Uint8Array, mimeType: string, expected
         if (object instanceof PDFArray) for (let index = 0; index < object.size(); index++) inspect(object.get(index));
       }
       for (const [, object] of pdf.context.enumerateIndirectObjects()) inspect(object);
+      if (original.isEncrypted) for (const [, object] of original.context.enumerateIndirectObjects()) inspect(object);
     } else {
       if (mimeType === "image/png") {
         if (!buffer.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10])) || !buffer.subarray(-12).equals(Buffer.from([0, 0, 0, 0, 73, 69, 78, 68, 174, 66, 96, 130]))) throw new Error("png signature");
@@ -56,7 +75,7 @@ export async function validateFile(bytes: Uint8Array, mimeType: string, expected
       if (metadata.format !== (mimeType === "image/png" ? "png" : "jpeg") || (metadata.pages ?? 1) > 1) throw new Error("image format");
       await image.stats();
     }
-  } catch { throw new DocumentationError(400, "Arquivo inválido, danificado ou com conteúdo não permitido. PDFs protegidos ou com ações/anexos não são aceitos nesta V1."); }
+  } catch { throw new DocumentationError(400, "Arquivo inválido, danificado ou com conteúdo não permitido. PDFs que exigem senha de abertura ou contêm ações/anexos não são aceitos."); }
   return createHash("sha256").update(buffer).digest("hex");
 }
 export async function readUpload(req: Request, size: number) {
