@@ -120,7 +120,7 @@ export async function workflowView(session: DocumentationViewer, folderId: strin
     db.documentationAnalysisRound.count({ where }),
     selectedId ? db.documentationPendingItem.findMany({ where: { ...where, roundId: selectedId }, orderBy: [{ createdAt: "asc" }, { id: "asc" }], skip: (issuePage - 1) * 20, take: 20, select: { id: true, message: true, status: true, personId: true, documentTypeId: true, documentId: true, createdAt: true, resolvedAt: true, createdBy: { select: { name: true } }, resolvedBy: { select: { name: true } }, person: { select: { name: true } }, documentType: { select: { name: true } }, document: { select: { originalFileName: true } } } }) : [],
     selectedId ? db.documentationPendingItem.count({ where: { ...where, roundId: selectedId } }) : 0,
-    db.documentationDocument.findMany({ where: { ...where, status: "ACTIVE" }, select: { id: true, originalFileName: true, personId: true, documentTypeId: true }, orderBy: { createdAt: "desc" }, take: 100 }),
+    db.documentationDocument.findMany({ where: { ...where, status: "ACTIVE", ...(selectedId ? { roundDocuments: { some: { ...where, roundId: selectedId } } } : {}) }, select: { id: true, originalFileName: true, personId: true, documentTypeId: true }, orderBy: { createdAt: "desc" }, take: 100 }),
     db.documentationDocumentType.findMany({ where: { tenantId: session.tenant.id, isActive: true }, select: { id: true, name: true }, orderBy: { name: "asc" }, take: 200 }),
     db.documentationPendingItem.count({ where: { ...where, status: "OPEN" } }),
   ]);

@@ -321,3 +321,20 @@ for (const format of DOCUMENT_FORMATS) {
     assert.equal(h.documents.get(started.id)!.status, "ACTIVE");
   });
 }
+
+test("received documents are bounded to a folder/tenant snapshot; own documents use existing upload origin", async () => {
+  const h = harness(); h.folder.status = "EM_ANALISE";
+  const calls: Args[] = [];
+  h.tx.documentationDocument.findMany = async args => { calls.push(args); return []; };
+  h.tx.documentationDocument.count = async args => { calls.push(args); return 0; };
+  const own = await listDocuments(correspondent, "folder-a", new URLSearchParams("group=correspondent"), h.db);
+  assert.equal(own.canUpload, true);
+  assert.deepEqual(calls[0].where, { tenantId: "tenant-a", folderId: "folder-a", status: "ACTIVE", uploadOrigin: "CORRESPONDENT" });
+  assert.deepEqual(calls[0].where, calls[1].where);
+  calls.length = 0;
+  await listDocuments(correspondent, "folder-a", new URLSearchParams("group=analysis&roundId=round-a"), h.db);
+  assert.deepEqual(calls[0].where, { tenantId: "tenant-a", folderId: "folder-a", status: "ACTIVE", roundDocuments: { some: { tenantId: "tenant-a", folderId: "folder-a", roundId: "round-a" } } });
+  assert.equal(calls[0].select?.storageKey, undefined); assert.equal(calls[0].select?.replacementReason, false);
+  await assert.rejects(listDocuments(correspondent, "folder-a", new URLSearchParams("group=foreign"), h.db), /Grupo documental inválido/);
+  await assert.rejects(listDocuments({ ...correspondent, user: { ...correspondent.user, id: "other-corr" } }, "folder-a", new URLSearchParams("group=correspondent"), h.db), /não atribuída/);
+});

@@ -130,7 +130,13 @@ export async function listDocuments(session: DocumentationViewer, folderId: stri
   const current = await folder(db, session, folderId);
   const page = Number(params.get("page") ?? 1); if (!Number.isSafeInteger(page) || page < 1 || page > 100000) throw new DocumentationError(400, "Página inválida.");
   const admin = canManageDocumentation(session); const audit = admin && params.get("audit") === "true";
-  const where: Prisma.DocumentationDocumentWhereInput = { tenantId: session.tenant.id, folderId, ...(audit ? {} : { status: "ACTIVE" }) };
+  const group = params.get("group");
+  if (group && !["analysis", "correspondent"].includes(group)) throw new DocumentationError(400, "Grupo documental inválido.");
+  const roundId = text(params.get("roundId"), "Análise");
+  const where: Prisma.DocumentationDocumentWhereInput = { tenantId: session.tenant.id, folderId, ...(audit ? {} : { status: "ACTIVE" }),
+    ...(group === "correspondent" ? { uploadOrigin: "CORRESPONDENT" } : {}),
+    ...(group === "analysis" ? roundId ? { roundDocuments: { some: { tenantId: session.tenant.id, folderId, roundId } } } : { uploadOrigin: "ADMINISTRATION" } : {}),
+  };
   const [items, total, people, types] = await Promise.all([
     db.documentationDocument.findMany({ where, select: { id: true, personId: true, documentTypeId: true, documentType: { select: { name: true } }, originalFileName: true, mimeType: true, fileSize: true, status: true, createdAt: true, checksum: true, replacedDocumentId: true, replacementReason: admin ? true : false, uploadedById: true, uploadedByRole: true, uploadOrigin: true, uploadedBy: { select: { name: true } } }, orderBy: [{ createdAt: "desc" }, { id: "desc" }], skip: (page - 1) * 30, take: 30 }),
     db.documentationDocument.count({ where }),

@@ -39,7 +39,7 @@ export async function listFolders(tenantId: string, params: URLSearchParams) {
 export async function folderDetail(tenantId: string, id: string, params: URLSearchParams) {
   const paging = pagination(params);
   const folder = await prisma.documentationFolder.findFirst({ where: { tenantId, id }, include: {
-    people: { orderBy: { createdAt: "asc" } }, broker: { select: { id: true, name: true } }, correspondent: { select: { id: true, name: true } },
+    people: { orderBy: { createdAt: "asc" } }, broker: { select: { id: true, name: true } }, correspondent: { select: { id: true, name: true, email: true, isActive: true, updatedAt: true } },
     construtora: { select: { id: true, name: true } }, empreendimento: { select: { id: true, name: true } },
   } });
   if (!folder) throw new DocumentationError(404, "Pasta não encontrada.");
@@ -48,5 +48,6 @@ export async function folderDetail(tenantId: string, id: string, params: URLSear
     prisma.documentationEvent.count({ where: { tenantId, folderId: id } }),
     prisma.documentationDocumentType.findMany({ where: { tenantId, isActive: true }, orderBy: [{ sortOrder: "asc" }, { name: "asc" }] }),
   ]);
-  return { folder, events, eventCount, types, page: paging.page };
+  const documentCount = await prisma.documentationDocument.count({ where: { tenantId, folderId: id, status: "ACTIVE" } });
+  return { folder, events, eventCount, types, documentCount, page: paging.page };
 }
