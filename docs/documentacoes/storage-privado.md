@@ -4,7 +4,7 @@
 
 Atualização posterior: bucket definitivo `flyimob-documentacoes2` em `us-east-2`, variável local ajustada e integração real aprovada. Os quatro controles privados, Put/Get, bytes/SHA-256, rotas documentais autenticadas, substituição/invalidação e limpeza foram verificados. Consulte [validação real](./validacao-storage-real.md). Os demais registros de bloqueio nesta página descrevem o estado histórico ao concluir a implementação da etapa 5.
 
-Na etapa seguinte, [workflow V1](./workflow-v1.md) acrescenta acesso documental do BROKER somente às suas próprias pastas e permite correções em PENDENCIA_DOCUMENTAL. Os estados de espera, análise e conclusão bloqueiam escritas. O storage e suas garantias não foram redesenhados.
+Na etapa seguinte, [workflow V1](./workflow-v1.md) acrescenta acesso documental do BROKER somente às suas próprias pastas e permite correções em PENDENCIA_DOCUMENTAL. Novos documentos podem ser adicionados em qualquer estado por usuários com acesso à pasta. Substituição e invalidação continuam restritas à janela de correção. O storage e suas garantias não foram redesenhados.
 
 Implementação concluída no código, sem deploy/commit/push. **Uso real de arquivos bloqueado enquanto não houver bucket documental privado configurado.** A inspeção local encontrou região/credenciais S3 existentes, mas não `AWS_S3_DOCUMENTATION_BUCKET`. Não foi escolhido um bucket arbitrário, criada infraestrutura ou alterada configuração AWS/Railway. Não houve envio de e-mail.
 
@@ -40,7 +40,7 @@ OWNER/DIRECTOR regional podem consultar e administrar documentos de seu tenant. 
 
 A policy documental é própria e permite acesso por atribuição mesmo antes de submissão formal. Não altera a policy de análise, que continua exigindo status submetido/rodada. Correspondente não recebe observações administrativas, comentários internos, CPF/contatos na página documental, configurações ou APIs de alteração de pessoas/responsáveis.
 
-Escritas documentais são permitidas em EM_MONTAGEM e AGUARDANDO_DOCUMENTOS; demais estados são somente leitura nesta V1. Início, finalização e invalidação usam version da pasta como compare-and-swap. Metadata enviado pelo cliente não determina tenant/uploader/origem. Pessoa deve pertencer ao mesmo tenant e pasta; tipo deve ser ativo no tenant.
+Adicionar documentos é permitido em todos os estados para usuários com acesso à pasta. Substituição e invalidação continuam limitadas a EM_MONTAGEM, AGUARDANDO_DOCUMENTOS e PENDENCIA_DOCUMENTAL. Início, finalização e invalidação usam version da pasta como compare-and-swap. Metadata enviado pelo cliente não determina tenant/uploader/origem. Pessoa deve pertencer ao mesmo tenant e pasta; tipo deve ser ativo no tenant.
 
 Download revalida atribuição e estado ACTIVE depois do I/O de storage. Invalidados, substituídos e PROCESSING não podem ser baixados nem visualizados. CORRESPONDENTE lista somente ACTIVE, mesmo forjando audit=true. OWNER/DIRECTOR podem listar histórico paginado com os metadados preservados.
 

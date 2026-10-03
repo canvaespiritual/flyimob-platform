@@ -196,17 +196,34 @@ test("S3 writes private encrypted immutable object; finalize checks metadata and
   });
   await documentationStorage.put(row, bytes, checksum); assert.equal((await documentationStorage.get(row)).bytes.byteLength, bytes.length); badMetadata = true; await assert.rejects(documentationStorage.get(row), /não corresponde/);
 });
-test("workflow states lock every conflicting document write while pendencies allow corrections", async () => {
+test("new uploads remain available during analysis and after conclusions without changing workflow status", async () => {
+  for (const status of ["EM_MONTAGEM", "AGUARDANDO_DOCUMENTOS", "PRONTA_PARA_ANALISE", "AGUARDANDO_CORRESPONDENTE", "PENDENCIA_DOCUMENTAL", "EM_REANALISE", "EM_ANALISE", "APROVADO", "CONDICIONADO", "REPROVADO"]) {
+    for (const viewer of [owner, correspondent, { ...owner, user: { ...owner.user, id: "broker-a", role: "BROKER" as const } }]) {
+      const h = harness(); h.folder.status = status;
+      const id = await active(h, viewer);
+      assert.equal(h.documents.get(id)!.status, "ACTIVE");
+      assert.equal(h.folder.status, status);
+      assert.equal((await listDocuments(viewer, "folder-a", new URLSearchParams(), h.db)).canUpload, true);
+      assert.equal(h.objects.size, 1);
+    }
+  }
+});
+
+test("uploads initiated before a workflow status change can finish; destructive corrections stay locked", async () => {
   for (const status of ["AGUARDANDO_CORRESPONDENTE", "EM_REANALISE", "EM_ANALISE", "APROVADO", "CONDICIONADO", "REPROVADO"]) {
     const h = harness(); const png = await image(); const started = await beginUpload(owner, "folder-a", body(png.length), h.db, h.storage); h.folder.status = status;
-    await assert.rejects(beginUpload(owner, "folder-a", { ...body(png.length), version: 1 }, h.db, h.storage), error => error instanceof DocumentationError && error.status === 409);
-    await assert.rejects(uploadDocument(owner, "folder-a", started.id, png, h.db, h.storage));
-    await assert.rejects(finalizeUpload(owner, "folder-a", started.id, { version: 1 }, h.db, h.storage));
-    await assert.rejects(invalidateDocument(owner, "folder-a", started.id, { version: 1, reason: "test" }, h.db));
-    assert.equal(h.objects.size, 0); assert.equal(h.version(), 1);
+    await uploadDocument(owner, "folder-a", started.id, png, h.db, h.storage);
+    await finalizeUpload(owner, "folder-a", started.id, { version: 1 }, h.db, h.storage);
+    assert.equal(h.folder.status, status);
+    await assert.rejects(invalidateDocument(owner, "folder-a", started.id, { version: 2, reason: "test" }, h.db));
+    await assert.rejects(beginUpload(owner, "folder-a", { ...body(png.length), version: 2, replacedDocumentId: started.id, replacementReason: "test" }, h.db, h.storage));
+    const listed = await listDocuments(owner, "folder-a", new URLSearchParams(), h.db);
+    assert.equal(listed.canUpload, true);
+    assert.equal(listed.items[0].canCorrect, false);
+    assert.equal(h.documents.get(started.id)!.status, "ACTIVE");
   }
-  const h = harness(); h.folder.status = "PENDENCIA_DOCUMENTAL"; const id = await active(h); assert.equal(h.documents.get(id)!.status, "ACTIVE");
 });
+
 test("responsible broker can read and correct own folder; other brokers cannot access it", async () => {
   const h = harness(); const id = await active(h);
   const broker: DocumentationViewer = { ...owner, user: { ...owner.user, id: "broker-a", role: "BROKER" } };

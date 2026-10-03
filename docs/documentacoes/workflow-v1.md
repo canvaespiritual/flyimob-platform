@@ -30,7 +30,7 @@ Parecer em elaboração usa comentário SHARED append-only, referenciado por eve
 
 ## Documentos e concorrência
 
-Operações documentais e administrativas apropriadas permitidas em montagem/aguardando documentos/pendências. Espera, análise e estados terminais bloqueiam escritas. Alteração de status de pasta com pendências não pode contornar o reenvio pelo PATCH administrativo. Correspondente mantém restrição de autoria para correções; BROKER atua somente na pasta atualmente atribuída a ele. Arquivos inativos continuam sem preview/download. Nenhum objeto ou histórico é apagado automaticamente.
+Operações documentais e administrativas apropriadas permitidas em montagem/aguardando documentos/pendências. Novos documentos podem ser adicionados em qualquer estado, sem alterar o status ou os snapshots de análise já registrados. Espera, análise e estados terminais continuam bloqueando substituição e invalidação. Alteração de status de pasta com pendências não pode contornar o reenvio pelo PATCH administrativo. Correspondente mantém restrição de autoria para correções; BROKER atua somente na pasta atualmente atribuída a ele. Arquivos inativos continuam sem preview/download. Nenhum objeto ou histórico é apagado automaticamente.
 
 Toda mutação usa transação e CAS de Folder.version + status + escopo atual, inclusive notas/pendências. Criação de rodada, snapshots, resultado e auditoria são atômicos. Duplicações retornam 409, sem criar segunda rodada/conclusão. Todas as ações após envio verificam roundId da rodada corrente. Restrições SQL únicas/composite FKs da fundação permanecem como proteção adicional.
 
