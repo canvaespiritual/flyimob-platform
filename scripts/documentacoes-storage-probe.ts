@@ -1,5 +1,5 @@
-import { loadEnvConfig } from "@next/env";
-loadEnvConfig(process.cwd());
+import { loadDocumentationEnv } from "./documentacoes-env.mjs";
+loadDocumentationEnv();
 
 async function main() {
   const { documentationStorage } = await import("../src/lib/documentacoes/storage.server");

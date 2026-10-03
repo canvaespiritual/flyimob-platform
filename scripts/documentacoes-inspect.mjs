@@ -1,15 +1,15 @@
 import { readFileSync, readdirSync, existsSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { createRequire } from "node:module";
+import { loadDocumentationEnv } from "./documentacoes-env.mjs";
 const require = createRequire(import.meta.url);
-const { loadEnvConfig } = require("@next/env");
 const { PrismaClient } = require("@prisma/client");
 function databaseValue(path) {
   if (!existsSync(path)) return null;
   const match = readFileSync(path, "utf8").match(/^DATABASE_URL\s*=\s*(.*)$/m);
   return match ? match[1].trim().replace(/^['"]|['"]$/g, "") : null;
 }
-loadEnvConfig(process.cwd());
+loadDocumentationEnv();
 const configured = process.env.DATABASE_URL;
 const env = databaseValue(".env"), local = databaseValue(".env.local");
 console.log(JSON.stringify({ envAndLocalSame: !local || env === local,

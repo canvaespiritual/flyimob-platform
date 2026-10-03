@@ -1,7 +1,7 @@
-import { loadEnvConfig } from "@next/env";
+import { loadDocumentationEnv } from "./documentacoes-env.mjs";
 import assert from "node:assert/strict";
 import { randomUUID, createHash } from "node:crypto";
-loadEnvConfig(process.cwd());
+loadDocumentationEnv();
 
 async function main() {
   const { requestContext } = await import("../tests/documentacoes/request-context");

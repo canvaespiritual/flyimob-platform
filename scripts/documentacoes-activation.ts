@@ -1,4 +1,4 @@
-import { loadEnvConfig } from "@next/env";
+import { loadDocumentationEnv } from "./documentacoes-env.mjs";
 import { readFileSync } from "node:fs";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
@@ -10,7 +10,7 @@ import { hashPassword, verifyPassword } from "../src/lib/auth.server";
 import { DocumentationError } from "../src/lib/documentacoes/validation";
 import { requestContext } from "../tests/documentacoes/request-context";
 import { createSessionToken } from "../src/lib/auth.server";
-loadEnvConfig(process.cwd());
+loadDocumentationEnv();
 const tenantId = "cmjjziyt30004wjwkr45f3vgf";
 const mode = process.argv[2];
 const marker = `TESTE DOCUMENTACOES ${randomUUID()}`;
