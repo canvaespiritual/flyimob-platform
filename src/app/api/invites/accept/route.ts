@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { hashPassword, createSessionToken, sessionCookieName } from "@/lib/auth.server";
+import { postAuthDestination } from "@/lib/auth-policy";
 
 export async function POST(req: Request) {
   const body = await req.json().catch(() => ({}));
@@ -52,9 +53,9 @@ export async function POST(req: Request) {
   });
 
   // auto-login
-  const sessToken = createSessionToken({ uid: user.id, tid: user.tenantId, role: user.role });
+  const sessToken = createSessionToken({ uid: user.id, tid: user.tenantId, role: user.role, sv: user.sessionVersion });
 
-  const res = NextResponse.json({ ok: true });
+  const res = NextResponse.json({ ok: true, redirectTo: postAuthDestination(user.role, undefined, "/admin/dashboard") });
 
   res.cookies.set(sessionCookieName, sessToken, {
     httpOnly: true,

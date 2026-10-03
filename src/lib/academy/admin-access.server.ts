@@ -11,7 +11,7 @@ export async function academyAccessResponse() {
 export async function academyAdmin() {
   const session = await getSessionUser();
   if (!session) throw new AcademyError(401, "authentication_required");
-  if (!isAcademyAdmin(session.user.id)) throw new AcademyError(403, "academy_access_denied");
+  if (session.user.role === "CORRESPONDENTE" || !isAcademyAdmin(session.user.id)) throw new AcademyError(403, "academy_access_denied");
   return session.user;
 }
 

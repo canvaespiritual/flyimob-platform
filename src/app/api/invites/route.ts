@@ -12,6 +12,7 @@ function roleLabel(role: UserRole) {
     MANAGER: "Gerente",
     BROKER: "Corretor",
     DATA_ENTRY: "Operador de Cadastro",
+    CORRESPONDENTE: "Correspondente Bancário",
   }[role];
 }
 

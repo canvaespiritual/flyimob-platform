@@ -1,3 +1,5 @@
+import { FinancingModel } from "@prisma/client";
+import { getPermissionApiSession } from "@/lib/api-access.server";
 import { prisma } from "../../../../lib/prisma";
 
 function toInt(v: FormDataEntryValue | null) {
@@ -23,22 +25,16 @@ function toText(v: FormDataEntryValue | null) {
 }
 
 export async function POST(req: Request) {
+  const auth = await getPermissionApiSession("data:manage");
+  if (!auth.ok) return auth.response;
+  const tenant = auth.session.tenant;
   const form = await req.formData();
-
-  const tenantSlug = String(form.get("tenantSlug") || "").trim();
-
-if (!tenantSlug) {
-  return new Response("Tenant obrigatório", { status: 400 });
-}
   const empreendimentoId = String(form.get("empreendimentoId") || "").trim();
   const tipologiaId = String(form.get("tipologiaId") || "").trim();
 
   if (!empreendimentoId || !tipologiaId) {
     return new Response("empreendimentoId e tipologiaId são obrigatórios", { status: 400 });
   }
-
-  const tenant = await prisma.tenant.findUnique({ where: { slug: tenantSlug } });
-  if (!tenant) return new Response("Tenant não encontrado", { status: 404 });
 
   const emp = await prisma.empreendimento.findFirst({
     where: { id: empreendimentoId, tenantId: tenant.id },
@@ -98,7 +94,7 @@ if (!tenantSlug) {
       precoInicial,
       precoPorM2,
 
-      financingModel: financingModel as any,
+      financingModel: financingModel as FinancingModel,
       percentualAteChaves,
       valorAvaliacaoBanco,
 

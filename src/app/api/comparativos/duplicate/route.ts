@@ -1,6 +1,6 @@
+import { getPermissionApiSession } from "@/lib/api-access.server";
 import { NextResponse } from "next/server";
 import { prisma } from "../../../../lib/prisma";
-import { requireUser } from "@/lib/authz.server";
 
 function makeSlug(): string {
   const rand = Math.random().toString(36).slice(2, 8);
@@ -9,12 +9,14 @@ function makeSlug(): string {
 }
 
 export async function POST(req: Request) {
+  const auth = await getPermissionApiSession("comparativos:use");
+  if (!auth.ok) return auth.response;
   try {
     const body = await req.json().catch(() => ({}));
     const id = String(body?.id ?? "").trim();
     if (!id) return NextResponse.json({ ok: false, error: "id é obrigatório." }, { status: 400 });
 
-    const s = await requireUser();
+    const s = auth.session;
     const tenant = s.tenant;
 
     const original = await prisma.comparativo.findFirst({

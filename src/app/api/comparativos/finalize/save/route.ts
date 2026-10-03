@@ -1,7 +1,7 @@
+import { getPermissionApiSession } from "@/lib/api-access.server";
 import { NextResponse } from "next/server";
 import { PutObjectCommand } from "@aws-sdk/client-s3";
 import { prisma } from "../../../../../lib/prisma";
-import { requireUser } from "@/lib/authz.server";
 import { s3, S3_BUCKET, S3_REGION } from "../../../../../lib/s3";
 
 export const runtime = "nodejs";
@@ -56,6 +56,8 @@ async function generateAndUploadOgImage(slugPublico: string, comparativoId: stri
 }
 
 export async function POST(req: Request) {
+  const auth = await getPermissionApiSession("comparativos:use");
+  if (!auth.ok) return auth.response;
   try {
     const body = await req.json().catch(() => ({}));
     const id = String(body?.id ?? "");
@@ -65,7 +67,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, error: "id é obrigatório" }, { status: 400 });
     }
 
-    const s = await requireUser();
+    const s = auth.session;
     const tenant = s.tenant;
 
     const comparativo = await prisma.comparativo.findFirst({

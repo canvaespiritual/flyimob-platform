@@ -1,8 +1,10 @@
+import { getPermissionApiSession } from "@/lib/api-access.server";
 import { NextResponse } from "next/server";
 import { prisma } from "../../../../lib/prisma";
-import { requireUser } from "@/lib/authz.server";
 
 export async function POST(req: Request) {
+  const auth = await getPermissionApiSession("comparativos:use");
+  if (!auth.ok) return auth.response;
   try {
     const body = await req.json().catch(() => ({}));
     const id = String(body?.id ?? "").trim();
@@ -10,7 +12,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, error: "id é obrigatório." }, { status: 400 });
     }
 
-    const s = await requireUser();
+    const s = auth.session;
     const tenant = s.tenant;
 
     // segurança extra: só deleta se for do tenant

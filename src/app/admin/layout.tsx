@@ -1,9 +1,11 @@
 // src/app/admin/layout.tsx
 import AdminShell from "./AdminShell";
 import { requireUser } from "@/lib/authz.server";
+import { redirect } from "next/navigation";
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const s = await requireUser();
+  if (s.user.role === "CORRESPONDENTE") redirect("/correspondente");
 
   return (
     <AdminShell

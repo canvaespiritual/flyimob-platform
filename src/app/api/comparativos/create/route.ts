@@ -1,6 +1,6 @@
+import { getPermissionApiSession } from "@/lib/api-access.server";
 import { NextResponse } from "next/server";
 import { prisma } from "../../../../lib/prisma";
-import { requireUser } from "@/lib/authz.server";
 
 function makeSlug(): string {
   // slug curto e seguro (sem lib externa)
@@ -10,6 +10,8 @@ function makeSlug(): string {
 }
 
 export async function POST(req: Request) {
+  const auth = await getPermissionApiSession("comparativos:use");
+  if (!auth.ok) return auth.response;
   try {
     const body = await req.json().catch(() => ({}));
     const titulo = String(body?.titulo ?? "").trim();
@@ -22,7 +24,7 @@ export async function POST(req: Request) {
       );
     }
 
-    const s = await requireUser();
+    const s = auth.session;
     const tenant = s.tenant;
 
     // Gera slug único (tenta algumas vezes)

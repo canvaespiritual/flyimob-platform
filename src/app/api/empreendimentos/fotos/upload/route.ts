@@ -1,3 +1,4 @@
+import { getPermissionApiSession } from "@/lib/api-access.server";
 import { NextResponse } from "next/server";
 import { PutObjectCommand } from "@aws-sdk/client-s3";
 import sharp from "sharp";
@@ -14,19 +15,17 @@ function safeName(name: string) {
 }
 
 export async function POST(req: Request) {
+  const auth = await getPermissionApiSession("data:manage");
+  if (!auth.ok) return auth.response;
+  const tenant = auth.session.tenant;
   const form = await req.formData();
-
-  const tenantSlug = String(form.get("tenantSlug") || "");
   const empreendimentoId = String(form.get("empreendimentoId") || "");
   const coverIndex = Number(String(form.get("coverIndex") || "0"));
   const files = form.getAll("files") as File[];
 
-  if (!tenantSlug || !empreendimentoId || files.length === 0) {
+  if (!empreendimentoId || files.length === 0) {
     return NextResponse.json({ error: "missing_fields" }, { status: 400 });
   }
-
-  const tenant = await prisma.tenant.findUnique({ where: { slug: tenantSlug } });
-  if (!tenant) return NextResponse.json({ error: "tenant_not_found" }, { status: 404 });
 
   const emp = await prisma.empreendimento.findFirst({
     where: { id: empreendimentoId, tenantId: tenant.id },
@@ -40,7 +39,7 @@ export async function POST(req: Request) {
     data: { isCover: false },
   });
 
-  const created: any[] = [];
+  const created: { id: string; urlFull: string; urlThumb: string; ordem: number; isCover: boolean }[] = [];
 
   for (let i = 0; i < files.length; i++) {
     const file = files[i];

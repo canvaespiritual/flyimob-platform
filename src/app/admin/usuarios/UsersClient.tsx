@@ -23,6 +23,7 @@ const ROLE_LABEL: Record<UserRole, string> = {
   MANAGER: "Manager",
   BROKER: "Corretor",
   DATA_ENTRY: "Operador",
+  CORRESPONDENTE: "Correspondente Bancário",
 };
 
 export default function UsersClient() {
@@ -232,6 +233,7 @@ export default function UsersClient() {
                 <option value="MANAGER">Manager</option>
                 <option value="BROKER">Corretor</option>
                 <option value="DATA_ENTRY">Operador</option>
+                <option value="CORRESPONDENTE">Correspondente Bancário</option>
               </select>
               <p className="text-xs text-gray-500">
                 (Owner global não é convidável por design.)

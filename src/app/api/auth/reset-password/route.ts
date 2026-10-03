@@ -35,16 +35,23 @@ export async function POST(req: Request) {
 
   const newHash = await hashPassword(password);
 
-  await prisma.$transaction([
-    prisma.user.update({
-      where: { id: prt.userId },
-      data: { passwordHash: newHash },
-    }),
-    prisma.passwordResetToken.update({
-      where: { id: prt.id },
+  const changed = await prisma.$transaction(async (tx) => {
+    // Claim once under the database lock; concurrent reset cannot reuse the token.
+    const claimed = await tx.passwordResetToken.updateMany({
+      where: { id: prt.id, usedAt: null, expiresAt: { gt: new Date() }, user: { isActive: true } },
       data: { usedAt: new Date() },
-    }),
-  ]);
+    });
+    if (claimed.count !== 1) return false;
+    await tx.user.update({
+      where: { id: prt.userId },
+      data: { passwordHash: newHash, sessionVersion: { increment: 1 } },
+    });
+    await tx.passwordResetToken.updateMany({
+      where: { userId: prt.userId, usedAt: null }, data: { usedAt: new Date() },
+    });
+    return true;
+  });
+  if (!changed) return NextResponse.json({ ok: false, error: "Token inválido/expirado." }, { status: 400 });
 
   return NextResponse.json({ ok: true });
 }

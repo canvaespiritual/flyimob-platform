@@ -1,7 +1,10 @@
+import { getPermissionApiSession } from "@/lib/api-access.server";
 import { NextResponse } from "next/server";
 import { prisma } from "../../../../../lib/prisma";
 
 export async function POST(req: Request) {
+  const auth = await getPermissionApiSession("comparativos:use");
+  if (!auth.ok) return auth.response;
   try {
     const body = await req.json().catch(() => ({}));
     const itemId = String(body?.itemId ?? "");
@@ -11,7 +14,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, error: "itemId e direction (up/down) são obrigatórios." }, { status: 400 });
     }
 
-    const item = await prisma.comparativoItem.findUnique({ where: { id: itemId } });
+    const item = await prisma.comparativoItem.findFirst({ where: { id: itemId, comparativo: { tenantId: auth.session.tenant.id } } });
     if (!item) return NextResponse.json({ ok: false, error: "Item não encontrado." }, { status: 404 });
 
     const siblings = await prisma.comparativoItem.findMany({

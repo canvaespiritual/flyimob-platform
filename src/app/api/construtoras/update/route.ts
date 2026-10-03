@@ -1,3 +1,4 @@
+import { getPermissionApiSession } from "@/lib/api-access.server";
 import { prisma } from "../../../../lib/prisma";
 
 function txt(form: FormData, key: string) {
@@ -8,9 +9,10 @@ function txt(form: FormData, key: string) {
 }
 
 export async function POST(req: Request) {
+  const auth = await getPermissionApiSession("data:manage");
+  if (!auth.ok) return auth.response;
+  const tenant = auth.session.tenant;
   const form = await req.formData();
-
-  const tenantSlug = String(form.get("tenantSlug") || "").trim();
   const id = String(form.get("id") || "").trim();
   const name = String(form.get("name") || "").trim();
 
@@ -18,10 +20,6 @@ export async function POST(req: Request) {
     return new Response("id e name são obrigatórios", { status: 400 });
   }
 
-  const tenant = await prisma.tenant.findUnique({
-    where: { slug: tenantSlug },
-  });
-  if (!tenant) return new Response("Tenant não encontrado", { status: 404 });
 
   const current = await prisma.construtora.findFirst({
     where: { id, tenantId: tenant.id },

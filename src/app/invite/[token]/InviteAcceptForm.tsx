@@ -78,7 +78,7 @@ export default function InviteAcceptForm({ token }: { token: string }) {
       return;
     }
 
-    router.replace("/admin/dashboard");
+    router.replace(data.redirectTo || "/admin/dashboard");
 
   }
 

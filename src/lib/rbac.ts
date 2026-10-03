@@ -7,14 +7,16 @@ export type Permission =
   | "users:read"
   | "users:invite"
   | "dashboard:view"
-  | "crm:use";
+  | "crm:use"
+  | "documentacoes:manage";
 
 const rolePerms: Record<UserRole, Permission[]> = {
-  OWNER:      ["data:manage", "comparativos:use", "users:read", "users:invite", "dashboard:view", "crm:use"],
-  DIRECTOR:   ["data:manage", "comparativos:use", "dashboard:view", "crm:use"],
+  OWNER:      ["data:manage", "comparativos:use", "users:read", "users:invite", "dashboard:view", "crm:use", "documentacoes:manage"],
+  DIRECTOR:   ["data:manage", "comparativos:use", "dashboard:view", "crm:use", "documentacoes:manage"],
   MANAGER:    ["comparativos:use", "dashboard:view", "crm:use"],
   BROKER:     ["comparativos:use", "dashboard:view", "crm:use"],
   DATA_ENTRY: ["data:manage"],
+  CORRESPONDENTE: [],
 };
 
 export function hasPermission(role: UserRole, perm: Permission) {

@@ -2,6 +2,7 @@
 import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import { sessionCookieName, verifySessionToken } from "@/lib/auth.server";
+import { sessionAuthorizesUser } from "@/lib/auth-policy";
 
 export async function getSessionUser() {
   // ✅ Next 16: cookies() pode ser async (Promise)
@@ -20,7 +21,7 @@ export async function getSessionUser() {
     include: { tenant: true },
   });
 
-  if (!user) return null;
+  if (!user || !sessionAuthorizesUser(v.payload, user)) return null;
 
   return {
     user: {

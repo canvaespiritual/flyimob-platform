@@ -97,7 +97,7 @@ export default function AdminShell({
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
 
-    const nav = useMemo(() => {
+    const nav = useMemo<NavItem[]>(() => {
     const base = ALL_NAV.filter((i) => !i.perm || hasPermission(userRole, i.perm));
 
    if (isPlatform && userRole === "OWNER") {
@@ -121,9 +121,15 @@ if (
       href: "/admin/financeiro",
       label: "Financeiro",
     },
+    {
+      href: "/admin/documentacoes",
+      label: "Documentações",
+      perm: "documentacoes:manage",
+    },
   ];
 }
 
+if (!isPlatform && userRole === "BROKER") return [...base, { href: "/documentacoes", label: "Minhas documentações" }];
 return base;
   }, [userRole, isPlatform]);
 

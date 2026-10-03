@@ -1,18 +1,18 @@
+import { getPermissionApiSession } from "@/lib/api-access.server";
 import { NextResponse } from "next/server";
 import { prisma } from "../../../../../lib/prisma";
 
 export async function POST(req: Request) {
+  const auth = await getPermissionApiSession("data:manage");
+  if (!auth.ok) return auth.response;
+  const tenant = auth.session.tenant;
   const body = await req.json().catch(() => ({}));
-  const tenantSlug = String(body.tenantSlug || "");
   const empreendimentoId = String(body.empreendimentoId || "");
   const fotoId = String(body.fotoId || "");
 
-  if (!tenantSlug || !empreendimentoId || !fotoId) {
+  if (!empreendimentoId || !fotoId) {
     return NextResponse.json({ error: "missing_fields" }, { status: 400 });
   }
-
-  const tenant = await prisma.tenant.findUnique({ where: { slug: tenantSlug } });
-  if (!tenant) return NextResponse.json({ error: "tenant_not_found" }, { status: 404 });
 
   const emp = await prisma.empreendimento.findFirst({
     where: { id: empreendimentoId, tenantId: tenant.id },

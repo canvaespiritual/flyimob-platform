@@ -16,6 +16,7 @@ export const viewport: Viewport = { width: "device-width", initialScale: 1, them
 export default async function AcademyLayout({ children }: { children: React.ReactNode }) {
   const session = await getSessionUser();
   if (!session) redirect("/login?returnTo=%2Facademy-admin");
+  if (session.user.role === "CORRESPONDENTE") redirect("/correspondente");
   if (!isAcademyAdmin(session.user.id)) {
     return (
       <main className="min-h-screen bg-slate-950 p-6 text-white">

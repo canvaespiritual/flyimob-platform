@@ -1,3 +1,5 @@
+import { EmpreendimentoTipo } from "@prisma/client";
+import { getPermissionApiSession } from "@/lib/api-access.server";
 import { prisma } from "../../../../lib/prisma";
 
 function txt(form: FormData, key: string) {
@@ -8,6 +10,9 @@ function txt(form: FormData, key: string) {
 }
 
 export async function POST(req: Request) {
+  const auth = await getPermissionApiSession("data:manage");
+  if (!auth.ok) return auth.response;
+  const tenant = auth.session.tenant;
   const form = await req.formData();
     const lat = form.get("lat") ? Number(form.get("lat")) : null;
 const lng = form.get("lng") ? Number(form.get("lng")) : null;
@@ -16,14 +21,9 @@ const bairro = form.get("bairro") ? String(form.get("bairro")) : null;
 const cidade = form.get("cidade") ? String(form.get("cidade")) : null;
 const uf = form.get("uf") ? String(form.get("uf")) : null;
 const cep = form.get("cep") ? String(form.get("cep")) : null;
-
-  const tenantSlug = String(form.get("tenantSlug") || "").trim();
   const id = String(form.get("id") || "").trim();
 
   if (!id) return new Response("ID obrigatório", { status: 400 });
-
-  const tenant = await prisma.tenant.findUnique({ where: { slug: tenantSlug } });
-  if (!tenant) return new Response("Tenant não encontrado", { status: 404 });
 
   const name = String(form.get("name") || "").trim();
   const tipo = String(form.get("tipo") || "OUTRO").trim();
@@ -31,6 +31,9 @@ const cep = form.get("cep") ? String(form.get("cep")) : null;
 
   const construtoraIdRaw = String(form.get("construtoraId") || "").trim();
   const construtoraId = construtoraIdRaw ? construtoraIdRaw : null;
+  if (construtoraId && !await prisma.construtora.findFirst({ where: { id: construtoraId, tenantId: tenant.id }, select: { id: true } })) {
+    return new Response("Construtora inválida", { status: 400 });
+  }
 
   const descricao = String(form.get("descricao") || "").trim();
 
@@ -57,7 +60,7 @@ const cep = form.get("cep") ? String(form.get("cep")) : null;
     where: { id, tenantId: tenant.id },
     data: {
       name,
-      tipo: tipo as any,
+      tipo: tipo as EmpreendimentoTipo,
       endereco,
       construtoraId,
       descricao: descricao || null,

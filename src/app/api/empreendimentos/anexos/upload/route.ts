@@ -1,3 +1,4 @@
+import { getPermissionApiSession } from "@/lib/api-access.server";
 import { NextResponse } from "next/server";
 import { PutObjectCommand } from "@aws-sdk/client-s3";
 import { prisma } from "../../../../../lib/prisma";
@@ -13,15 +14,16 @@ function safeName(name: string) {
 }
 
 export async function POST(req: Request) {
+  const auth = await getPermissionApiSession("data:manage");
+  if (!auth.ok) return auth.response;
+  const tenant = auth.session.tenant;
   const form = await req.formData();
-
-  const tenantSlug = String(form.get("tenantSlug") || "");
   const empreendimentoId = String(form.get("empreendimentoId") || "");
   const tipo = String(form.get("tipo") || "GERAL");
   const titulo = String(form.get("titulo") || "");
   const file = form.get("file") as File | null;
 
-  if (!tenantSlug || !empreendimentoId || !file) {
+  if (!empreendimentoId || !file) {
     return NextResponse.json({ error: "missing_fields" }, { status: 400 });
   }
 
@@ -31,9 +33,6 @@ export async function POST(req: Request) {
   if (buf.length > maxBytes) {
     return NextResponse.json({ error: "file_too_large" }, { status: 400 });
   }
-
-  const tenant = await prisma.tenant.findUnique({ where: { slug: tenantSlug } });
-  if (!tenant) return NextResponse.json({ error: "tenant_not_found" }, { status: 404 });
 
   const emp = await prisma.empreendimento.findFirst({
     where: { id: empreendimentoId, tenantId: tenant.id },

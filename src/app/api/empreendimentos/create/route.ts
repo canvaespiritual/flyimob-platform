@@ -1,3 +1,5 @@
+import { EmpreendimentoTipo } from "@prisma/client";
+import { getPermissionApiSession } from "@/lib/api-access.server";
 import { prisma } from "../../../../lib/prisma";
 function txt(form: FormData, key: string) {
   const v = form.get(key);
@@ -8,15 +10,10 @@ function txt(form: FormData, key: string) {
 
 
 export async function POST(req: Request) {
+  const auth = await getPermissionApiSession("data:manage");
+  if (!auth.ok) return auth.response;
+  const tenant = auth.session.tenant;
   const form = await req.formData();
-
-  const tenantSlug = String(form.get("tenantSlug") || "").trim();
-
-if (!tenantSlug) {
-  return new Response("Tenant obrigatório", { status: 400 });
-}
-  const tenant = await prisma.tenant.findUnique({ where: { slug: tenantSlug } });
-  if (!tenant) return new Response("Tenant não encontrado", { status: 404 });
 
   const name = String(form.get("name") || "").trim();
   const slug = String(form.get("slug") || "").trim();
@@ -35,6 +32,9 @@ if (!tenantSlug) {
 
   const construtoraIdRaw = String(form.get("construtoraId") || "").trim();
   const construtoraId = construtoraIdRaw ? construtoraIdRaw : null;
+  if (construtoraId && !await prisma.construtora.findFirst({ where: { id: construtoraId, tenantId: tenant.id }, select: { id: true } })) {
+    return new Response("Construtora inválida", { status: 400 });
+  }
 
   const dataLancamentoRaw = String(form.get("dataLancamento") || "").trim();
   const dataEntregaRaw = String(form.get("dataEntrega") || "").trim();
@@ -63,7 +63,7 @@ if (!tenantSlug) {
 
     name,
     slug,
-    tipo: tipo as any,
+    tipo: tipo as EmpreendimentoTipo,
 
     endereco,
     descricao: descricao || null,

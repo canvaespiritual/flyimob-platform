@@ -26,19 +26,21 @@ export async function hashPassword(password: string) {
 }
 
 export async function verifyPassword(password: string, stored: string) {
-  const [algo, n, r, p, saltHex, hashHex] = stored.split(":");
-  if (algo !== "scrypt") return false;
+  try {
+    const parts = stored.split(":");
+    const [algo, n, r, p, saltHex, hashHex] = parts;
+    if (parts.length !== 6 || algo !== "scrypt" || !/^[a-f0-9]{32}$/i.test(saltHex) ||
+        !/^[a-f0-9]{128}$/i.test(hashHex)) return false;
 
-  const salt = Buffer.from(saltHex, "hex");
-  const expected = Buffer.from(hashHex, "hex");
-
-  const derived = crypto.scryptSync(password, salt, expected.length, {
-    N: Number(n),
-    r: Number(r),
-    p: Number(p),
-  });
-
-  return crypto.timingSafeEqual(derived, expected);
+    const salt = Buffer.from(saltHex, "hex");
+    const expected = Buffer.from(hashHex, "hex");
+    const derived = crypto.scryptSync(password, salt, expected.length, {
+      N: Number(n), r: Number(r), p: Number(p),
+    });
+    return crypto.timingSafeEqual(derived, expected);
+  } catch {
+    return false;
+  }
 }
 
 // =========================
@@ -49,6 +51,7 @@ type SessionPayload = {
   tid: string;
   role: string;
   exp: number; // epoch seconds
+  sv?: number; // Legacy sessions without sv are version zero.
 };
 
 function base64url(input: Buffer | string) {
@@ -70,7 +73,7 @@ function sign(data: string, secret: string) {
  * @param days validade em dias (ex: 30)
  */
 export function createSessionToken(
-  payload: { uid: string; tid: string; role: string },
+  payload: { uid: string; tid: string; role: string; sv?: number },
   days = 30
 ) {
   const secret = process.env.SESSION_SECRET;
@@ -91,18 +94,33 @@ export function verifySessionToken(token: string) {
   const secret = process.env.SESSION_SECRET;
   if (!secret) return { ok: false as const, reason: "missing_secret" };
 
-  const [body, sig] = token.split(".");
-  if (!body || !sig) return { ok: false as const, reason: "bad_format" };
+  try {
+    const parts = token.split(".");
+    const [body, sig] = parts;
+    if (parts.length !== 2 || !body || !sig || !/^[A-Za-z0-9_-]+$/.test(body) || !/^[A-Za-z0-9_-]+$/.test(sig)) {
+      return { ok: false as const, reason: "bad_format" };
+    }
 
-  const expected = sign(body, secret);
-  if (!crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected))) {
-    return { ok: false as const, reason: "bad_sig" };
+    const expected = sign(body, secret);
+    if (sig.length !== expected.length || !crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected))) {
+      return { ok: false as const, reason: "bad_sig" };
+    }
+
+    const payload = JSON.parse(Buffer.from(body, "base64").toString("utf8")) as SessionPayload;
+    if (!payload || typeof payload !== "object" ||
+        typeof payload.uid !== "string" || !payload.uid ||
+        typeof payload.tid !== "string" || !payload.tid ||
+        typeof payload.role !== "string" || !payload.role ||
+        !Number.isSafeInteger(payload.exp) ||
+        (payload.sv !== undefined && (!Number.isSafeInteger(payload.sv) || payload.sv < 0))) {
+      return { ok: false as const, reason: "bad_payload" };
+    }
+    if (payload.exp <= Math.floor(Date.now() / 1000)) {
+      return { ok: false as const, reason: "expired" };
+    }
+
+    return { ok: true as const, payload };
+  } catch {
+    return { ok: false as const, reason: "bad_payload" };
   }
-
-  const payload = JSON.parse(Buffer.from(body, "base64").toString("utf8")) as SessionPayload;
-  if (!payload?.exp || payload.exp < Math.floor(Date.now() / 1000)) {
-    return { ok: false as const, reason: "expired" };
-  }
-
-  return { ok: true as const, payload };
 }

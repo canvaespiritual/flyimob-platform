@@ -1,15 +1,14 @@
+import { getPermissionApiSession } from "@/lib/api-access.server";
 import { prisma } from "../../../../lib/prisma";
 
 export async function POST(req: Request) {
+  const auth = await getPermissionApiSession("data:manage");
+  if (!auth.ok) return auth.response;
+  const tenant = auth.session.tenant;
   const form = await req.formData();
-
-  const tenantSlug = String(form.get("tenantSlug") || "").trim();
   const id = String(form.get("id") || "").trim();
 
   if (!id) return new Response("id obrigatório", { status: 400 });
-
-  const tenant = await prisma.tenant.findUnique({ where: { slug: tenantSlug } });
-  if (!tenant) return new Response("Tenant não encontrado", { status: 404 });
 
   const construtora = await prisma.construtora.findFirst({
     where: { id, tenantId: tenant.id },

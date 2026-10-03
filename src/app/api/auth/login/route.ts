@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "../../../../lib/prisma";
 import { createSessionToken, sessionCookieName, verifyPassword } from "@/lib/auth.server";
+import { postAuthDestination } from "@/lib/auth-policy";
 
 export async function POST(req: Request) {
   try {
@@ -17,7 +18,7 @@ export async function POST(req: Request) {
 
     const user = await prisma.user.findUnique({ where: { email } });
 
-    if (!user?.passwordHash) {
+    if (!user?.passwordHash || !user.isActive) {
       return NextResponse.json({ ok: false, error: "Credenciais inválidas." }, { status: 401 });
     }
 
@@ -27,11 +28,11 @@ export async function POST(req: Request) {
     }
 
     const token = createSessionToken(
-      { uid: user.id, tid: user.tenantId, role: user.role },
+      { uid: user.id, tid: user.tenantId, role: user.role, sv: user.sessionVersion },
       30
     );
 
-    const res = NextResponse.json({ ok: true });
+    const res = NextResponse.json({ ok: true, redirectTo: postAuthDestination(user.role, body?.returnTo) });
 
     res.cookies.set(sessionCookieName, token, {
       httpOnly: true,

@@ -1,20 +1,16 @@
+import { getPermissionApiSession } from "@/lib/api-access.server";
 import { prisma } from "../../../../lib/prisma";
 
 export async function POST(req: Request) {
+  const auth = await getPermissionApiSession("data:manage");
+  if (!auth.ok) return auth.response;
+  const tenant = auth.session.tenant;
   const body = await req.json().catch(() => ({}));
-
-  const tenantSlug = String(body.tenantSlug || "").trim();
-  if (!tenantSlug) {
-  return new Response("Tenant obrigatório", { status: 400 });
-}
   const name = String(body.name || "").trim();
 
   if (!name) {
     return new Response("Nome obrigatório", { status: 400 });
   }
-
-  const tenant = await prisma.tenant.findUnique({ where: { slug: tenantSlug } });
-  if (!tenant) return new Response("Tenant não encontrado", { status: 404 });
 
   // 🔒 padroniza nome para evitar duplicidade por espaço/case
   const normalizedName = name.replace(/\s+/g, " ").trim();

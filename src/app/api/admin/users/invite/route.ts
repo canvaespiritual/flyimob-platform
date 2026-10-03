@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import crypto from "crypto";
 import { prisma } from "@/lib/prisma";
-import { requirePermission, requireUser, assertCanInvite } from "@/lib/authz.server";
+import { assertCanInvite } from "@/lib/authz.server";
+import { getPermissionApiSession } from "@/lib/api-access.server";
 import { UserRole } from "@prisma/client";
 import { sendInviteEmail } from "@/lib/email/brevo";
 
@@ -16,20 +17,26 @@ function roleLabel(role: UserRole) {
     MANAGER: "Gerente",
     BROKER: "Corretor",
     DATA_ENTRY: "Operador de Cadastro",
+    CORRESPONDENTE: "Correspondente Bancário",
   }[role];
 }
 
 export async function POST(req: Request) {
   // precisa estar logado e ter users:invite
-  const s = await requirePermission("users:invite");
+  const auth = await getPermissionApiSession("users:invite");
+  if (!auth.ok) return auth.response;
+  const s = auth.session;
 
   const body = await req.json().catch(() => ({}));
   const email = String(body?.email ?? "").trim().toLowerCase();
   const role = String(body?.role ?? "") as UserRole;
 
   if (!email) return NextResponse.json({ ok: false, error: "Email obrigatório." }, { status: 400 });
-  if (!["DIRECTOR","MANAGER","BROKER","DATA_ENTRY"].includes(role)) {
+  if (!["DIRECTOR","MANAGER","BROKER","DATA_ENTRY","CORRESPONDENTE"].includes(role)) {
     return NextResponse.json({ ok: false, error: "Role inválido." }, { status: 400 });
+  }
+  if (role === "CORRESPONDENTE" && s.tenant.isPlatform) {
+    return NextResponse.json({ ok: false, error: "Correspondentes pertencem a uma operação." }, { status: 403 });
   }
 
   // regra de quem pode convidar quem

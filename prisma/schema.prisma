@@ -18,6 +18,7 @@ enum UserRole {
   MANAGER
   BROKER
   DATA_ENTRY // operador de cadastro
+  CORRESPONDENTE
 }
 
 enum BrokerLevel {
@@ -308,6 +309,8 @@ model Tenant {
   financialTaxClosings  FinancialTaxClosing[]
   financialSettlements  FinancialSettlement[]
   financialDocuments    FinancialDocument[]
+  documentationFolders DocumentationFolder[]
+  documentationDocumentTypes DocumentationDocumentType[]
 }
 
 model User {
@@ -318,6 +321,7 @@ model User {
   passwordHash String?
   role         UserRole @default(OWNER)
   isActive     Boolean  @default(true)
+  sessionVersion Int @default(0)
   whatsapp     String?
   telefone     String?
   creci        String?
@@ -340,7 +344,18 @@ model User {
   crmLeads         CRMLead[]
 
   financialParticipantProfiles FinancialParticipant[] @relation("FinancialParticipantUser")
+  documentationBrokerFolders DocumentationFolder[] @relation("DocumentationBroker")
+  documentationCorrespondentFolders DocumentationFolder[] @relation("DocumentationCorrespondent")
+  documentationCreatedFolders DocumentationFolder[] @relation("DocumentationCreator")
+  documentationUploadedDocuments DocumentationDocument[]
+  documentationRounds DocumentationAnalysisRound[]
+  documentationAnalyses DocumentationAnalysis[]
+  documentationCreatedPendingItems DocumentationPendingItem[] @relation("DocumentationPendingCreator")
+  documentationResolvedPendingItems DocumentationPendingItem[] @relation("DocumentationPendingResolver")
+  documentationComments DocumentationComment[]
+  documentationEvents DocumentationEvent[]
 
+  @@unique([tenantId, id])
   @@index([tenantId])
   @@index([supervisorId])
   @@index([role])
@@ -423,7 +438,9 @@ model Construtora {
   financialSales           FinancialSale[]
   receiptRemittances       FinancialReceiptRemittance[]
   groupedFinancialInvoices FinancialInvoice[]
+  documentationFolders DocumentationFolder[]
 
+  @@unique([tenantId, id])
   @@unique([tenantId, name])
   @@index([tenantId])
 }
@@ -468,7 +485,9 @@ model Empreendimento {
   anexos         EmpreendimentoAnexo[]
   tipologias     EmpreendimentoTipologia[]
   financialSales FinancialSale[]
+  documentationFolders DocumentationFolder[]
 
+  @@unique([tenantId, id])
   @@unique([tenantId, slug])
   @@index([tenantId])
   @@index([lat, lng])
@@ -655,7 +674,9 @@ model CRMLead {
 
   tenant Tenant @relation(fields: [tenantId], references: [id])
   owner  User   @relation(fields: [ownerId], references: [id])
+  documentationFolders DocumentationFolder[]
 
+  @@unique([tenantId, id])
   @@index([tenantId])
   @@index([ownerId])
   @@index([status])
@@ -1949,4 +1970,325 @@ model AcademyWebhookEvent {
   @@unique([provider, transactionId, eventType])
   @@index([processingStatus, receivedAt])
   @@index([saleId])
+}
+
+// DOCUMENTAÇÕES: independent tenant-scoped domain. No public URL contract.
+enum DocumentationFolderStatus {
+  EM_MONTAGEM
+  AGUARDANDO_DOCUMENTOS
+  PRONTA_PARA_ANALISE
+  AGUARDANDO_CORRESPONDENTE
+  PENDENCIA_DOCUMENTAL
+  EM_REANALISE
+  EM_ANALISE
+  APROVADO
+  CONDICIONADO
+  REPROVADO
+}
+
+enum DocumentationPersonRelationship {
+  TITULAR
+  CONJUGE
+  DEVEDOR_SOLIDARIO
+  FIADOR
+  FILHO
+  PARENTE
+  PROCURADOR
+  TERCEIRO
+  OUTRO
+}
+
+enum DocumentationDocumentStatus {
+  PROCESSING
+  ACTIVE
+  INVALIDATED
+  REPLACED
+}
+
+enum DocumentationUploadOrigin {
+  ADMINISTRATION
+  CORRESPONDENT
+}
+
+enum DocumentationAnalysisResult {
+  PENDENCIA_DOCUMENTAL
+  APROVADO
+  CONDICIONADO
+  REPROVADO
+}
+
+enum DocumentationPendingStatus {
+  OPEN
+  RESOLVED
+  CANCELLED
+}
+
+enum DocumentationCommentVisibility {
+  INTERNAL
+  SHARED
+}
+
+model DocumentationFolder {
+  id String @id @default(cuid())
+  tenantId String
+  crmLeadId String?
+  brokerId String
+  correspondentId String?
+  construtoraId String?
+  empreendimentoId String?
+  status DocumentationFolderStatus @default(EM_MONTAGEM)
+  administrativeObservation String?
+  version Int @default(0)
+  createdById String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  crmLead CRMLead? @relation(fields: [tenantId, crmLeadId], references: [tenantId, id], onDelete: Restrict)
+  broker User @relation("DocumentationBroker", fields: [tenantId, brokerId], references: [tenantId, id], onDelete: Restrict)
+  correspondent User? @relation("DocumentationCorrespondent", fields: [tenantId, correspondentId], references: [tenantId, id], onDelete: Restrict)
+  createdBy User @relation("DocumentationCreator", fields: [tenantId, createdById], references: [tenantId, id], onDelete: Restrict)
+  construtora Construtora? @relation(fields: [tenantId, construtoraId], references: [tenantId, id], onDelete: Restrict)
+  empreendimento Empreendimento? @relation(fields: [tenantId, empreendimentoId], references: [tenantId, id], onDelete: Restrict)
+  people DocumentationPerson[]
+  documents DocumentationDocument[]
+  rounds DocumentationAnalysisRound[]
+  analyses DocumentationAnalysis[]
+  pendingItems DocumentationPendingItem[]
+  comments DocumentationComment[]
+  events DocumentationEvent[]
+
+  @@unique([tenantId, id])
+  @@index([tenantId, status, createdAt])
+  @@index([tenantId, brokerId])
+  @@index([tenantId, correspondentId, status])
+  @@index([tenantId, crmLeadId])
+  @@index([tenantId, createdById])
+  @@index([tenantId, construtoraId])
+  @@index([tenantId, empreendimentoId])
+}
+
+model DocumentationPerson {
+  id String @id @default(cuid())
+  tenantId String
+  folderId String
+  name String
+  cpf String?
+  phone String?
+  email String?
+  birthDate DateTime?
+  relationship DocumentationPersonRelationship
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  folder DocumentationFolder @relation(fields: [tenantId, folderId], references: [tenantId, id], onDelete: Restrict)
+  documents DocumentationDocument[]
+  pendingItems DocumentationPendingItem[]
+
+  @@unique([tenantId, folderId, id])
+  @@index([tenantId, folderId, relationship])
+  @@index([tenantId, cpf])
+}
+
+model DocumentationDocumentType {
+  id String @id @default(cuid())
+  tenantId String
+  code String
+  name String
+  description String?
+  defaultRequired Boolean @default(false)
+  sortOrder Int @default(0)
+  isActive Boolean @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  documents DocumentationDocument[]
+  pendingItems DocumentationPendingItem[]
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, code])
+  @@index([tenantId, isActive, sortOrder])
+}
+
+model DocumentationDocument {
+  id String @id @default(cuid())
+  tenantId String
+  folderId String
+  personId String?
+  documentTypeId String?
+  uploadedById String
+  uploadOrigin DocumentationUploadOrigin
+  uploadedByRole UserRole
+  originalFileName String
+  storageKey String @unique
+  mimeType String
+  fileSize BigInt
+  checksum String?
+  status DocumentationDocumentStatus @default(PROCESSING)
+  replacedDocumentId String?
+  replacementReason String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  folder DocumentationFolder @relation(fields: [tenantId, folderId], references: [tenantId, id], onDelete: Restrict)
+  person DocumentationPerson? @relation(fields: [tenantId, folderId, personId], references: [tenantId, folderId, id], onDelete: Restrict)
+  documentType DocumentationDocumentType? @relation(fields: [tenantId, documentTypeId], references: [tenantId, id], onDelete: Restrict)
+  uploadedBy User @relation(fields: [tenantId, uploadedById], references: [tenantId, id], onDelete: Restrict)
+  replacedDocument DocumentationDocument? @relation("DocumentationReplacement", fields: [tenantId, folderId, replacedDocumentId], references: [tenantId, folderId, id], onDelete: Restrict)
+  replacements DocumentationDocument[] @relation("DocumentationReplacement")
+  pendingItems DocumentationPendingItem[]
+  roundDocuments DocumentationRoundDocument[]
+  analysisDocuments DocumentationAnalysisDocument[]
+
+  @@unique([tenantId, folderId, id])
+  @@index([tenantId, folderId, status])
+  @@index([tenantId, folderId, personId])
+  @@index([tenantId, documentTypeId])
+  @@index([tenantId, uploadedById])
+  @@index([tenantId, folderId, replacedDocumentId])
+}
+
+model DocumentationAnalysisRound {
+  id String @id @default(cuid())
+  tenantId String
+  folderId String
+  sequence Int
+  correspondentId String
+  folderVersion Int
+  sentAt DateTime
+  closedAt DateTime?
+  createdAt DateTime @default(now())
+  folder DocumentationFolder @relation(fields: [tenantId, folderId], references: [tenantId, id], onDelete: Restrict)
+  correspondent User @relation(fields: [tenantId, correspondentId], references: [tenantId, id], onDelete: Restrict)
+  analysis DocumentationAnalysis?
+  pendingItems DocumentationPendingItem[]
+  events DocumentationEvent[]
+  documents DocumentationRoundDocument[]
+
+  @@unique([tenantId, folderId, id])
+  @@unique([tenantId, folderId, sequence])
+  @@index([tenantId, correspondentId, sentAt])
+}
+
+// Snapshot of immutable file revisions included in each submission.
+model DocumentationRoundDocument {
+  tenantId String
+  folderId String
+  roundId String
+  documentId String
+  round DocumentationAnalysisRound @relation(fields: [tenantId, folderId, roundId], references: [tenantId, folderId, id], onDelete: Restrict)
+  document DocumentationDocument @relation(fields: [tenantId, folderId, documentId], references: [tenantId, folderId, id], onDelete: Restrict)
+
+  @@id([tenantId, folderId, roundId, documentId])
+  @@index([tenantId, folderId, documentId])
+}
+
+model DocumentationAnalysis {
+  id String @id @default(cuid())
+  tenantId String
+  folderId String
+  roundId String
+  authorId String
+  result DocumentationAnalysisResult
+  observation String?
+  requestedAmount Decimal? @db.Decimal(18, 2)
+  approvedAmount Decimal? @db.Decimal(18, 2)
+  financingAmount Decimal? @db.Decimal(18, 2)
+  subsidyAmount Decimal? @db.Decimal(18, 2)
+  fgtsAmount Decimal? @db.Decimal(18, 2)
+  entryAmount Decimal? @db.Decimal(18, 2)
+  metadata Json?
+  metadataVersion Int @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  folder DocumentationFolder @relation(fields: [tenantId, folderId], references: [tenantId, id], onDelete: Restrict)
+  round DocumentationAnalysisRound @relation(fields: [tenantId, folderId, roundId], references: [tenantId, folderId, id], onDelete: Restrict)
+  author User @relation(fields: [tenantId, authorId], references: [tenantId, id], onDelete: Restrict)
+  pendingItems DocumentationPendingItem[]
+  documents DocumentationAnalysisDocument[]
+
+  @@unique([tenantId, folderId, id])
+  @@unique([tenantId, folderId, roundId])
+  @@index([tenantId, result, createdAt])
+  @@index([tenantId, authorId])
+}
+
+model DocumentationAnalysisDocument {
+  tenantId String
+  folderId String
+  analysisId String
+  documentId String
+  analysis DocumentationAnalysis @relation(fields: [tenantId, folderId, analysisId], references: [tenantId, folderId, id], onDelete: Restrict)
+  document DocumentationDocument @relation(fields: [tenantId, folderId, documentId], references: [tenantId, folderId, id], onDelete: Restrict)
+
+  @@id([tenantId, folderId, analysisId, documentId])
+  @@index([tenantId, folderId, documentId])
+}
+
+model DocumentationPendingItem {
+  id String @id @default(cuid())
+  tenantId String
+  folderId String
+  roundId String?
+  analysisId String?
+  personId String?
+  documentTypeId String?
+  documentId String?
+  message String
+  status DocumentationPendingStatus @default(OPEN)
+  createdById String
+  resolvedById String?
+  createdAt DateTime @default(now())
+  resolvedAt DateTime?
+  folder DocumentationFolder @relation(fields: [tenantId, folderId], references: [tenantId, id], onDelete: Restrict)
+  round DocumentationAnalysisRound? @relation(fields: [tenantId, folderId, roundId], references: [tenantId, folderId, id], onDelete: Restrict)
+  analysis DocumentationAnalysis? @relation(fields: [tenantId, folderId, analysisId], references: [tenantId, folderId, id], onDelete: Restrict)
+  person DocumentationPerson? @relation(fields: [tenantId, folderId, personId], references: [tenantId, folderId, id], onDelete: Restrict)
+  documentType DocumentationDocumentType? @relation(fields: [tenantId, documentTypeId], references: [tenantId, id], onDelete: Restrict)
+  document DocumentationDocument? @relation(fields: [tenantId, folderId, documentId], references: [tenantId, folderId, id], onDelete: Restrict)
+  createdBy User @relation("DocumentationPendingCreator", fields: [tenantId, createdById], references: [tenantId, id], onDelete: Restrict)
+  resolvedBy User? @relation("DocumentationPendingResolver", fields: [tenantId, resolvedById], references: [tenantId, id], onDelete: Restrict)
+
+  @@index([tenantId, folderId, status])
+  @@index([tenantId, folderId, roundId])
+  @@index([tenantId, folderId, analysisId])
+  @@index([tenantId, folderId, personId])
+  @@index([tenantId, documentTypeId])
+  @@index([tenantId, folderId, documentId])
+  @@index([tenantId, createdById])
+  @@index([tenantId, resolvedById])
+}
+
+model DocumentationComment {
+  id String @id @default(cuid())
+  tenantId String
+  folderId String
+  authorId String
+  visibility DocumentationCommentVisibility @default(INTERNAL)
+  message String
+  createdAt DateTime @default(now())
+  folder DocumentationFolder @relation(fields: [tenantId, folderId], references: [tenantId, id], onDelete: Restrict)
+  author User @relation(fields: [tenantId, authorId], references: [tenantId, id], onDelete: Restrict)
+
+  @@index([tenantId, folderId, visibility, createdAt])
+  @@index([tenantId, authorId])
+}
+
+model DocumentationEvent {
+  id String @id @default(cuid())
+  tenantId String
+  folderId String
+  actorId String?
+  actorRole UserRole?
+  eventType String @db.VarChar(100)
+  roundId String?
+  metadata Json?
+  createdAt DateTime @default(now())
+  folder DocumentationFolder @relation(fields: [tenantId, folderId], references: [tenantId, id], onDelete: Restrict)
+  actor User? @relation(fields: [tenantId, actorId], references: [tenantId, id], onDelete: Restrict)
+  round DocumentationAnalysisRound? @relation(fields: [tenantId, folderId, roundId], references: [tenantId, folderId, id], onDelete: Restrict)
+
+  @@index([tenantId, folderId, createdAt])
+  @@index([tenantId, folderId, roundId])
+  @@index([tenantId, actorId])
+  @@index([tenantId, eventType, createdAt])
 }

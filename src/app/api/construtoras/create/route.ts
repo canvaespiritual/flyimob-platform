@@ -1,3 +1,5 @@
+import { safeReturnTo } from "@/lib/auth-policy";
+import { getPermissionApiSession } from "@/lib/api-access.server";
 import { prisma } from "../../../../lib/prisma";
 
 function txt(form: FormData, key: string) {
@@ -8,17 +10,15 @@ function txt(form: FormData, key: string) {
 }
 
 export async function POST(req: Request) {
+  const auth = await getPermissionApiSession("data:manage");
+  if (!auth.ok) return auth.response;
+  const tenant = auth.session.tenant;
   const form = await req.formData();
-
-  const tenantSlug = String(form.get("tenantSlug") || "").trim();
   const name = String(form.get("name") || "").trim();
 
-  if (!tenantSlug || !name) {
+  if (!name) {
     return new Response("Dados inválidos", { status: 400 });
   }
-
-  const tenant = await prisma.tenant.findUnique({ where: { slug: tenantSlug } });
-  if (!tenant) return new Response("Tenant não encontrado", { status: 404 });
 
   // ✅ trava duplicidade no mesmo tenant (mensagem limpa)
   const exists = await prisma.construtora.findFirst({
@@ -54,7 +54,7 @@ export async function POST(req: Request) {
   const origin = host ? `${proto}://${host}` : new URL(req.url).origin;
 
   return Response.redirect(
-    new URL(returnTo ? String(returnTo) : "/admin/construtoras", origin),
+    new URL(safeReturnTo(returnTo, "/admin/construtoras"), origin),
     303
   );
 }

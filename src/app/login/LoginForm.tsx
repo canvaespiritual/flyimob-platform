@@ -17,7 +17,7 @@ export default function LoginForm({ returnTo }: { returnTo: string }) {
       const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email, password, returnTo }),
       });
 
       const data = await res.json().catch(() => ({}));
@@ -28,7 +28,7 @@ export default function LoginForm({ returnTo }: { returnTo: string }) {
         return;
       }
 
-      window.location.href = returnTo || "/admin/construtoras";
+      window.location.href = data.redirectTo || "/admin";
     } catch (err) {
       setError("Erro de rede ao fazer login.");
       setLoading(false);
