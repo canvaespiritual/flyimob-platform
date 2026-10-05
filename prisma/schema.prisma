@@ -13,6 +13,37 @@ enum MarketingTrackingStatus {
   PAUSED
   ARCHIVED
 }
+
+enum OperationalRole {
+  DIRECTION
+  DIRECTOR
+  MANAGER
+  BROKER
+  ADMINISTRATIVE
+  PARTNER
+  OTHER
+}
+
+model OperationPerson {
+  id String @id @default(cuid())
+  tenantId String
+  name String
+  email String?
+  operationalRole OperationalRole @default(OTHER)
+  active Boolean @default(true)
+  independent Boolean @default(false)
+  mergedIntoId String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  mergedInto OperationPerson? @relation("PersonMerge", fields: [tenantId, mergedIntoId], references: [tenantId, id], onDelete: Restrict)
+  mergedFrom OperationPerson[] @relation("PersonMerge")
+  user User?
+  financialParticipant FinancialParticipant?
+  assignments CampaignBrokerAssignment[]
+  @@unique([tenantId, id])
+  @@index([tenantId, active])
+}
 enum MarketingPurpose {
   CLIENTES
   RECRUTAMENTO
@@ -120,7 +151,8 @@ model CampaignBrokerAssignment {
   id String @id @default(cuid())
   tenantId String
   campaignId String
-  brokerId String
+  brokerId String?
+  personId String?
   validFrom DateTime @db.Date
   validTo DateTime? @db.Date
   createdById String
@@ -129,10 +161,12 @@ model CampaignBrokerAssignment {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   campaign MarketingCampaign @relation(fields: [tenantId, campaignId], references: [tenantId, id], onDelete: Restrict)
-  broker User @relation("MarketingBroker", fields: [tenantId, brokerId], references: [tenantId, id], onDelete: Restrict)
+  broker User? @relation("MarketingBroker", fields: [tenantId, brokerId], references: [tenantId, id], onDelete: Restrict)
+  person OperationPerson? @relation(fields: [tenantId, personId], references: [tenantId, id], onDelete: Restrict)
   createdBy User @relation("MarketingAssignmentCreator", fields: [tenantId, createdById], references: [tenantId, id], onDelete: Restrict)
   @@index([tenantId, campaignId, validFrom])
   @@index([tenantId, brokerId, validFrom, validTo])
+  @@index([tenantId, personId, validFrom, validTo])
 }
 model MarketingCostRule {
   id String @id @default(cuid())
@@ -555,6 +589,7 @@ model Tenant {
   // =========================
   financialSales        FinancialSale[]
   financialParticipants FinancialParticipant[]
+  operationPeople OperationPerson[]
   financialAccounts     FinancialAccount[]
   financialTaxRules     FinancialTaxRule[]
   financialTaxClosings  FinancialTaxClosing[]
@@ -571,6 +606,9 @@ model Tenant {
 }
 
 model User {
+  @@unique([tenantId, personId])
+  personId String? @unique
+  person OperationPerson? @relation(fields: [tenantId, personId], references: [tenantId, id], onDelete: Restrict)
   id           String   @id @default(cuid())
   tenantId     String
   name         String
@@ -1329,6 +1367,9 @@ model FinancialTaxEntry {
 // =====================================================
 
 model FinancialParticipant {
+  @@unique([tenantId, personId])
+  personId String? @unique
+  person OperationPerson? @relation(fields: [tenantId, personId], references: [tenantId, id], onDelete: Restrict)
   id       String @id @default(cuid())
   tenantId String
 

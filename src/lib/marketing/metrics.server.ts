@@ -55,7 +55,7 @@ export async function markDailyMetricUnavailable(tenantId: string, campaignId: s
 export type ReportRow = {
   date: Date; currency: string; state: string; metaSpend: Prisma.Decimal | null; effectiveSpend: Prisma.Decimal | null; leads: number | null;
   impressions?: bigint | null; clicks?: bigint | null; linkClicks?: bigint | null;
-  campaign: { id: string; name: string; purpose: string; sourceStatus?: string | null; account?: { name: string; timezone: string }; assignments: { brokerId: string; validFrom: Date; validTo: Date | null; broker: { name: string } }[] };
+  campaign: { id: string; name: string; purpose: string; sourceStatus?: string | null; account?: { name: string; timezone: string }; assignments: { brokerId: string | null; validFrom: Date; validTo: Date | null; broker: { name: string } }[] };
 };
 export function summarize(rows: ReportRow[], brokerFilter?: string) {
   type Acc = { currency: string; meta: Prisma.Decimal; effective: Prisma.Decimal; leads: number; rows: number; impressions?: bigint | null; clicks?: bigint | null; linkClicks?: bigint | null };

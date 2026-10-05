@@ -5,6 +5,7 @@ import FinanceiroNav from "@/components/financeiro/FinanceiroNav";
 import { requireFinanceAccess } from "@/lib/financeiro/access.server";
 import { formatBRL } from "@/lib/financeiro/money";
 import { prisma } from "@/lib/prisma";
+import { operationalRoles } from "@/lib/team/policy";
 
 export const dynamic = "force-dynamic";
 
@@ -224,6 +225,7 @@ export default async function ParticipantesPage() {
       ],
 
       include: {
+        person: { select: { operationalRole: true, user: { select: { role: true } } } },
         accounts: {
           where: {
             active:
@@ -689,6 +691,8 @@ const documentPendingCount =
                               participant.name
                             }
                           </div>
+                          <p className="mt-1 text-xs text-slate-500">{participant.person ? operationalRoles[participant.person.operationalRole] : "Função não definida"} · {participant.person?.user ? `Acesso ${participant.person.user.role}` : "Sem acesso"}</p>
+                          {session.user.role === "OWNER" && <Link className="text-xs text-teal-700 underline" href="/admin/usuarios">Gerenciar função / vínculo na equipe</Link>}
 
                           <div className="mt-1 text-xs text-gray-500">
                             {participant.cpfCnpj ||

@@ -143,9 +143,10 @@ test("settings explicitly project safe fields and never return credential envelo
 });
 test("campaign list scopes tenant, filters purpose/status and uses paginated current assignments", async () => {
   const db = database({ marketingCampaign: { findMany: async (args: { where: Record<string, unknown>; take: number; skip: number }) => {
-    assert.equal(args.where.tenantId, "a"); assert.equal(args.where.purpose, "RECRUTAMENTO"); assert.equal(args.take, 20); assert.equal(args.skip, 20);
-    assert.ok(args.where.assignments); return [];
-  }, count: async () => 0 } });
+    const where = (args.where.AND as Record<string, unknown>[])[0];
+    assert.equal(where.tenantId, "a"); assert.equal(where.purpose, "RECRUTAMENTO"); assert.equal(args.take, 20); assert.equal(args.skip, 20);
+    assert.ok(where.assignments); return [];
+  }, count: async () => 40 } });
   assert.equal((await campaignList(director, new URLSearchParams("page=2&purpose=RECRUTAMENTO&brokerId=unassigned"), db)).page, 2);
   await assert.rejects(campaignList(owner, new URLSearchParams("page=0"), db), /Página/);
   await assert.rejects(campaignList(owner, new URLSearchParams("purpose=UNKNOWN"), db), /Finalidade/);
@@ -158,8 +159,8 @@ test("overview defaults to client campaigns and leaves absence empty", async () 
 test("stale campaign version and foreign broker reject updates", async () => {
   const db = database({ marketingCampaign: { findFirst: async () => ({ id: "c", purpose: "CLIENTES" }), updateMany: async () => ({ count: 0 }) } });
   await assert.rejects(updateCampaign(owner, "c", { version: 0, purpose: "RECRUTAMENTO" }, db), /outra pessoa/);
-  const foreign = database({ marketingCampaign: { findFirst: async () => ({ id: "c", purpose: "CLIENTES" }), updateMany: async () => ({ count: 1 }) }, user: { findFirst: async () => null } });
-  await assert.rejects(updateCampaign(owner, "c", { version: 0, assignment: { brokerId: "foreign", validFrom: "2026-10-01" } }, foreign), /corretor ativo/);
+  const foreign = database({ marketingCampaign: { findFirst: async () => ({ id: "c", purpose: "CLIENTES" }), updateMany: async () => ({ count: 1 }) }, operationPerson: { findFirst: async () => null }, user: { findFirst: async () => null } });
+  await assert.rejects(updateCampaign(owner, "c", { version: 0, assignment: { brokerId: "foreign", validFrom: "2026-10-01" } }, foreign), /responsável ativo/);
 });
 test("cost rule creates new validity and refuses overlapping start or confirmed history", async () => {
   let closed: unknown; let created: Record<string, unknown> = {};

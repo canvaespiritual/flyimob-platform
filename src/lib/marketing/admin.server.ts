@@ -1,6 +1,8 @@
 import { Prisma, MarketingPurpose, MarketingTrackingStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { authorize, bodyObject, day, MarketingError, text, type MarketingViewer } from "./policy";
+import { personSelect } from "@/lib/team/select.server";
+import { eligiblePerson } from "@/lib/team/policy";
 
 type DB = Prisma.TransactionClient;
 export async function marketingTransaction<T>(db: typeof prisma, run: (tx: DB) => Promise<T>) {
@@ -58,17 +60,25 @@ export async function updateCampaign(viewer: MarketingViewer, id: string, value:
     if (body.purpose !== undefined && body.purpose !== campaign.purpose) await audit(tx, viewer, "CAMPAIGN_PURPOSE_CHANGED", id, { before: campaign.purpose, after: body.purpose as string });
     if (body.trackingStatus !== undefined && body.trackingStatus !== campaign.trackingStatus) await audit(tx, viewer, "CAMPAIGN_TRACKING_CHANGED", id, { before: campaign.trackingStatus, after: body.trackingStatus as string });
     if (body.assignment !== undefined) {
-      const assignment = bodyObject(body.assignment, ["brokerId", "validFrom", "reason"]);
+      const assignment = bodyObject(body.assignment, ["personId", "brokerId", "validFrom", "reason"]);
       const validFrom = day(assignment.validFrom);
-      const brokerId = assignment.brokerId === null ? null : text(assignment.brokerId, "Corretor");
+      const requestedId = assignment.personId !== undefined ? assignment.personId : assignment.brokerId;
+      let personId = requestedId === null ? null : text(requestedId, "Responsável");
+      // Older clients may still submit a User ID. Resolve only by explicit FK.
+      let person = personId ? await tx.operationPerson.findFirst({ where: { tenantId: viewer.tenant.id, id: personId, mergedIntoId: null }, select: personSelect }) : null;
+      if (personId && !person && assignment.personId === undefined) {
+        const user = await tx.user.findFirst({ where: { tenantId: viewer.tenant.id, id: personId }, select: { personId: true } });
+        personId = user?.personId ?? personId;
+        person = user?.personId ? await tx.operationPerson.findFirst({ where: { tenantId: viewer.tenant.id, id: user.personId, mergedIntoId: null }, select: personSelect }) : null;
+      }
       const reason = assignment.reason ? text(assignment.reason, "Motivo", 500) : null;
-      if (brokerId && !await tx.user.findFirst({ where: { tenantId: viewer.tenant.id, id: brokerId, role: "BROKER", isActive: true }, select: { id: true } })) throw new MarketingError(400, "Selecione um corretor ativo desta operação.");
+      if (personId && (!person || !eligiblePerson(person))) throw new MarketingError(400, "Selecione um responsável ativo desta operação.");
       const where = { tenantId: viewer.tenant.id, campaignId: id, cancelledAt: null };
       const previous = await tx.campaignBrokerAssignment.findFirst({ where: { ...where, validFrom: { lte: validFrom }, OR: [{ validTo: null }, { validTo: { gt: validFrom } }] } });
       const next = await tx.campaignBrokerAssignment.findFirst({ where: { ...where, validFrom: { gt: validFrom } }, orderBy: { validFrom: "asc" } });
       if (previous) await tx.campaignBrokerAssignment.update({ where: { id: previous.id }, data: previous.validFrom.getTime() === validFrom.getTime() ? { cancelledAt: new Date() } : { validTo: validFrom } });
-      if (brokerId) await tx.campaignBrokerAssignment.create({ data: { ...where, brokerId, validFrom, validTo: previous?.validTo ?? next?.validFrom ?? null, createdById: viewer.user.id, reason } });
-      await audit(tx, viewer, brokerId ? "CAMPAIGN_BROKER_ASSIGNED" : "CAMPAIGN_BROKER_REMOVED", id, { brokerId, previousBrokerId: previous?.brokerId ?? null, previousAssignmentId: previous?.id ?? null, validFrom: validFrom.toISOString().slice(0, 10) });
+      if (personId) await tx.campaignBrokerAssignment.create({ data: { ...where, personId, brokerId: person?.user?.id ?? null, validFrom, validTo: previous?.validTo ?? next?.validFrom ?? null, createdById: viewer.user.id, reason } });
+      await audit(tx, viewer, personId ? "CAMPAIGN_RESPONSIBLE_ASSIGNED" : "CAMPAIGN_RESPONSIBLE_REMOVED", id, { brokerId: personId, previousBrokerId: previous?.personId ?? previous?.brokerId ?? null, previousAssignmentId: previous?.id ?? null, validFrom: validFrom.toISOString().slice(0, 10) });
     }
     return { id, version: Number(body.version) + 1 };
   });

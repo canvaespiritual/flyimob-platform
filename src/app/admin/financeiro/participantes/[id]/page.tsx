@@ -12,6 +12,8 @@ import ParticipantRemittanceHistory, {
 import { requireFinanceAccess } from "@/lib/financeiro/access.server";
 import { formatBRL } from "@/lib/financeiro/money";
 import { prisma } from "@/lib/prisma";
+import Link from "next/link";
+import { operationalRoles } from "@/lib/team/policy";
 
 export const dynamic = "force-dynamic";
 
@@ -44,6 +46,7 @@ export default async function ParticipantePage({
       },
 
       include: {
+        person: { select: { operationalRole: true, user: { select: { role: true } } } },
         accounts: {
           orderBy: [
             {
@@ -597,6 +600,8 @@ export default async function ParticipantePage({
           Cadastro financeiro e
           histórico do participante.
         </p>
+        <p className="mt-2 text-sm text-slate-600">Função: {participant.person ? operationalRoles[participant.person.operationalRole] : "Não definida"} · {participant.person?.user ? `Acesso ${participant.person.user.role}` : "Sem acesso"}</p>
+        {session.user.role === "OWNER" && <Link className="text-sm text-teal-700 underline" href="/admin/usuarios">Gerenciar função operacional / vínculo na equipe</Link>}
 
         <div className="mt-5">
           <FinanceiroNav />

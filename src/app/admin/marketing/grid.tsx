@@ -2,7 +2,8 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { purposes } from "@/lib/marketing/policy";
-export const columns = { name: "Campanha", broker: "Corretor", account: "Conta", purpose: "Finalidade", status: "Status Meta", metaSpend: "Gasto Meta", effectiveSpend: "Gasto efetivo", increment: "Acréscimo operacional", leads: "Conversas", cplMeta: "CPL Meta", cplEffective: "CPL efetivo", impressions: "Impressões", clicks: "Cliques", linkClicks: "Cliques no link", cpc: "CPC Meta", cpm: "CPM Meta" };
+import { MetaStatusBadge } from "./meta-status";
+export const columns = { name: "Campanha", broker: "Responsável", account: "Conta", purpose: "Finalidade", status: "Status Meta", metaSpend: "Gasto Meta", effectiveSpend: "Gasto efetivo", increment: "Acréscimo operacional", leads: "Conversas", cplMeta: "CPL Meta", cplEffective: "CPL efetivo", impressions: "Impressões", clicks: "Cliques", linkClicks: "Cliques no link", cpc: "CPC Meta", cpm: "CPM Meta" };
 type Column = keyof typeof columns;
 const defaults: Column[] = ["name", "broker", "account", "metaSpend", "effectiveSpend", "leads", "cplMeta"];
 const presets: Record<string, Column[]> = { "Gestão diária": ["name", "broker", "metaSpend", "effectiveSpend", "leads", "cplMeta"], "Aquisição": ["name", "broker", "impressions", "clicks", "leads", "metaSpend", "cplMeta"], "Financeiro": ["name", "broker", "metaSpend", "increment", "effectiveSpend"], "Completa": Object.keys(columns) as Column[] };
@@ -25,7 +26,7 @@ export function CampaignGrid({ rows, preferenceKey }: { rows: GridRow[]; prefere
   function move(index: number, direction: number) { const next = [...selected]; [next[index], next[index + direction]] = [next[index + direction], next[index]]; save(next); }
   const monetary = new Set(["metaSpend", "effectiveSpend", "increment", "cplMeta", "cplEffective", "cpc", "cpm"]);
   function value(row: GridRow, column: Column) {
-    const value = row[column]; if (value === null) return "—";
+    const value = row[column]; if (column === "status") return <MetaStatusBadge status={row.status} />; if (value === null) return "—";
     if (column === "name") return <Link className="text-teal-700 underline" href={`/admin/marketing/campanhas?q=${encodeURIComponent(row.name)}`}>{row.name}</Link>;
     if (column === "purpose") return purposes[row.purpose];
     if (monetary.has(column)) { const [whole, cents] = String(value).split("."); return `${row.currency} ${whole.replace(/\B(?=(\d{3})+(?!\d))/g, ".")},${cents}`; }

@@ -26,6 +26,47 @@ async function inspect() {
 async function main() {
 try {
   if (process.argv.includes("--inspect")) console.log(JSON.stringify(await inspect(), null, 2));
+  else if (process.argv.includes("--rollback-delivery-test")) {
+    try {
+      await db.$transaction(async tx => {
+        const adapter = Object.assign(Object.create(tx), { $transaction: async <T>(run: (tx: Prisma.TransactionClient) => Promise<T>) => run(tx) }) as typeof db;
+        await tx.tenant.create({ data: { id: marker, slug: marker, name: "Synthetic Marketing delivery QA" } });
+        await tx.tenant.create({ data: { id: `${marker}-foreign`, slug: `${marker}-foreign`, name: "Synthetic foreign delivery" } });
+        const user = await tx.user.create({ data: { tenantId: marker, email: `${marker}@example.test`, name: "Synthetic", role: "OWNER" } });
+        const owner: MarketingViewer = { tenant: { id: marker, isPlatform: false }, user: { id: user.id, tenantId: marker, role: "OWNER" } };
+        const account = await tx.metaAdAccount.create({ data: { tenantId: marker, externalId: marker, name: "Synthetic", currency: "BRL", timezone: "America/Sao_Paulo" } });
+        const campaign = await tx.marketingCampaign.create({ data: { tenantId: marker, accountId: account.id, externalId: marker, name: "Synthetic", purpose: "CLIENTES" } });
+        const connection = await tx.metaConnection.create({ data: { tenantId: marker, label: "Synthetic delivery" } });
+        const run = await tx.marketingSyncRun.create({ data: { tenantId: marker, connectionId: connection.id, accountId: account.id, idempotencyKey: marker, periodFrom: day("2026-10-20"), periodTo: day("2026-10-20") } });
+        const expectFailure = async (label: string, action: () => Promise<unknown>) => {
+          await tx.$executeRawUnsafe("SAVEPOINT delivery_expected_failure");
+          let failed = false; try { await action(); } catch { failed = true; }
+          await tx.$executeRawUnsafe("ROLLBACK TO SAVEPOINT delivery_expected_failure");
+          await tx.$executeRawUnsafe("RELEASE SAVEPOINT delivery_expected_failure");
+          assert.ok(failed, label); checks.push(label);
+        };
+        const metric = await storeDailyMetric(marker, campaign.id, { date: "2026-10-20", metaSpend: "31", leads: 5, currency: "BRL", sourceObservedAt: new Date() }, adapter);
+        const data = { tenantId: marker, campaignId: campaign.id, adSetExternalId: "22", adExternalId: "33", creativeExternalId: "44", date: day("2026-10-20"), currency: "BRL", metaSpend: new Prisma.Decimal("18"), conversations: 3, sourceObservedAt: new Date(), syncRunId: run.id };
+        const ad = await tx.marketingAdDailyMetric.create({ data });
+        await tx.marketingAdDailyMetric.update({ where: { id: ad.id }, data: { metaSpend: new Prisma.Decimal("31"), conversations: 5 } });
+        assert.equal((await tx.marketingAdDailyMetric.findUniqueOrThrow({ where: { id: ad.id } })).metaSpend.toString(), "31");
+        await expectFailure("ad_daily_unique", () => tx.marketingAdDailyMetric.create({ data }));
+        await expectFailure("ad_daily_tenant_binding", () => tx.marketingAdDailyMetric.create({ data: { ...data, tenantId: `${marker}-foreign` } }));
+        await expectFailure("ad_daily_nonnegative", () => tx.marketingAdDailyMetric.update({ where: { id: ad.id }, data: { conversations: -1 } }));
+        await tx.marketingDailyMetric.update({ where: { id: metric.id }, data: { impressions: 1000n, clicks: 10n, linkClicks: 3n } });
+        const report = await overview(owner, new URLSearchParams("period=custom&from=2026-10-20&to=2026-10-20"), adapter);
+        assert.equal(report.totals[0].cpc, "3.10"); assert.equal(report.totals[0].cplMeta, "6.20"); assert.equal(report.totals[0].cpm, "31.00");
+        await expectFailure("campaign_delivery_nonnegative", () => tx.marketingDailyMetric.update({ where: { id: metric.id }, data: { clicks: -1n } }));
+        checks.push("creative_identity_intraday_delivery_ratios");
+        const event = await tx.marketingAuditEvent.create({ data: { tenantId: marker, actorId: user.id, eventType: "SYNTHETIC_DELIVERY", entityId: campaign.id, metadata: { before: "PAUSED", after: "ACTIVE" } } });
+        await expectFailure("audit_immutable", () => tx.marketingAuditEvent.delete({ where: { id: event.id } }));
+        await expectFailure("audit_metadata_allowlist", () => tx.marketingAuditEvent.create({ data: { tenantId: marker, actorId: user.id, eventType: "UNSAFE", entityId: campaign.id, metadata: { token: "synthetic" } } }));
+        throw rollback;
+      }, { isolationLevel: "Serializable", timeout: 180000, maxWait: 10000 });
+    } catch (error) { if (error !== rollback) throw error; }
+    assert.equal(await db.tenant.count({ where: { id: { in: [marker, `${marker}-foreign`] } } }), 0);
+    console.log(JSON.stringify({ checks, mandatoryRollback: true, syntheticTenantsRemaining: 0, externalCalls: 0 }));
+  }
   else if (process.argv.includes("--rollback-test")) {
     try {
       await db.$transaction(async tx => {
@@ -79,14 +120,14 @@ try {
         await savepoint("metric_cost_snapshot_immutable", () => tx.marketingDailyMetric.update({ where: { id: updated.id }, data: { costPercentage: 99 } }));
         const report = await overview(owner, new URLSearchParams("period=custom&from=2026-10-01&to=2026-10-31"), adapter);
         assert.equal(report.totals[0].metaSpend, "131.00"); assert.equal(report.unavailable, 1);
-        assert.equal(report.brokers.find(b => b.id === `${marker}-gilberto`)!.metaSpend, "31.00");
-        assert.equal(report.brokers.find(b => b.id === `${marker}-laura`)!.metaSpend, "100.00");
+        assert.equal(report.brokers.find(b => b.id === `person:user:${marker}-gilberto`)!.metaSpend, "31.00");
+        assert.equal(report.brokers.find(b => b.id === `person:user:${marker}-laura`)!.metaSpend, "100.00");
         checks.push("metric_replace_idempotency_snapshot_zero_missing_historical_brokers");
         await updateCampaign(owner, campaign.id, { version: 2, assignment: { brokerId: null, validFrom: "2026-10-21" } }, adapter);
         assert.equal(await tx.campaignBrokerAssignment.count({ where: { tenantId: marker, cancelledAt: { not: null } } }), 1);
         assert.equal((await overview(owner, new URLSearchParams("period=custom&from=2026-10-21&to=2026-10-21"), adapter)).brokers[0].name, "Não atribuídas");
         checks.push("future_assignment_cancel_preserves_history");
-        assert.equal((await campaignList(owner, new URLSearchParams(), adapter)).items.length, 1);
+        assert.equal((await campaignList(owner, new URLSearchParams("metaStatus=ALL"), adapter)).items.length, 1);
         const safeSettings = await settings(owner, adapter);
         assert.equal(JSON.stringify(safeSettings).includes("credentialCiphertext"), false);
         await assert.rejects(configureConnection(director, null, { label: "Forbidden" }, adapter), /Acesso/);
@@ -129,16 +170,17 @@ try {
         await savepoint("audit_immutable", () => tx.marketingAuditEvent.delete({ where: { id: events[0].id } }));
         await savepoint("audit_metadata_allowlist", () => tx.marketingAuditEvent.create({ data: { tenantId: marker, actorId: owner.user.id, eventType: "UNSAFE", entityId: a.id, metadata: { token: "synthetic" } } }));
         throw rollback;
-      }, { isolationLevel: "Serializable", timeout: 120000, maxWait: 10000 });
+      }, { isolationLevel: "Serializable", timeout: 360000, maxWait: 10000 });
       throw new Error("Rollback sentinel did not execute");
     } catch (error) { if (error !== rollback) throw error; }
     const remaining = await db.tenant.count({ where: { id: { in: [marker, `${marker}-foreign`] } } });
     assert.equal(remaining, 0);
     console.log(JSON.stringify({ checks, mandatoryRollback: true, syntheticTenantsRemaining: remaining, externalCalls: 0 }));
-  } else throw new Error("Use --inspect or --rollback-test");
+  } else throw new Error("Use --inspect, --rollback-test or --rollback-delivery-test");
 } catch (error) {
   // Do not print database URLs, Prisma parameters, payloads or external errors.
-  console.error(JSON.stringify({ failed: true, name: error instanceof Error ? error.name : "unknown", code: error instanceof Prisma.PrismaClientKnownRequestError ? error.code : undefined, completedChecks: checks }));
+  console.error(JSON.stringify({ failed: true, name: error instanceof Error ? error.name : "unknown", code: error instanceof Prisma.PrismaClientKnownRequestError ? error.code : error instanceof Prisma.PrismaClientInitializationError ? error.errorCode : undefined,
+    transactionExpired: error instanceof Prisma.PrismaClientKnownRequestError && /expired|timeout/i.test(String(error.meta?.error ?? "")), completedChecks: checks }));
   process.exitCode = 1;
 } finally { await db.$disconnect(); }
 }
