@@ -28,6 +28,7 @@ export async function mergePerson(tx: Prisma.TransactionClient, tenantId: string
   if (!source || !target || (source.user && target.user) || (source.financialParticipant && target.financialParticipant)) throw new MarketingError(409, "Vínculo conflitante. Cada pessoa admite um acesso e um participante.");
   if (source.user) await tx.user.update({ where: { id: source.user.id }, data: { personId: targetId } });
   if (source.financialParticipant) await tx.financialParticipant.update({ where: { id: source.financialParticipant.id }, data: { personId: targetId } });
+  await tx.documentationFolder.updateMany({ where: { tenantId, responsiblePersonId: sourceId }, data: { responsiblePersonId: targetId } });
   await tx.campaignBrokerAssignment.updateMany({ where: { tenantId, personId: sourceId }, data: { personId: targetId } });
   if (source.independent && !target.independent) await tx.operationPerson.update({ where: { tenantId_id: { tenantId, id: targetId } }, data: { independent: true } });
   await tx.operationPerson.update({ where: { tenantId_id: { tenantId, id: sourceId } }, data: { mergedIntoId: targetId, active: false } });

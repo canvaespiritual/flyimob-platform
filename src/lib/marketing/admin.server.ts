@@ -2,7 +2,7 @@ import { Prisma, MarketingPurpose, MarketingTrackingStatus } from "@prisma/clien
 import { prisma } from "@/lib/prisma";
 import { authorize, bodyObject, day, MarketingError, text, type MarketingViewer } from "./policy";
 import { personSelect } from "@/lib/team/select.server";
-import { eligiblePerson } from "@/lib/team/policy";
+import { canActAsSalesResponsible } from "@/lib/team/policy";
 
 type DB = Prisma.TransactionClient;
 export async function marketingTransaction<T>(db: typeof prisma, run: (tx: DB) => Promise<T>) {
@@ -72,7 +72,7 @@ export async function updateCampaign(viewer: MarketingViewer, id: string, value:
         person = user?.personId ? await tx.operationPerson.findFirst({ where: { tenantId: viewer.tenant.id, id: user.personId, mergedIntoId: null }, select: personSelect }) : null;
       }
       const reason = assignment.reason ? text(assignment.reason, "Motivo", 500) : null;
-      if (personId && (!person || !eligiblePerson(person))) throw new MarketingError(400, "Selecione um responsável ativo desta operação.");
+      if (personId && (!person || !canActAsSalesResponsible(person))) throw new MarketingError(400, "Selecione um responsável ativo desta operação.");
       const where = { tenantId: viewer.tenant.id, campaignId: id, cancelledAt: null };
       const previous = await tx.campaignBrokerAssignment.findFirst({ where: { ...where, validFrom: { lte: validFrom }, OR: [{ validTo: null }, { validTo: { gt: validFrom } }] } });
       const next = await tx.campaignBrokerAssignment.findFirst({ where: { ...where, validFrom: { gt: validFrom } }, orderBy: { validFrom: "asc" } });

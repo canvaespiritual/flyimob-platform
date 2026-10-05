@@ -17,7 +17,7 @@ export async function correspondentFolders(session: DocumentationViewer, params:
   const paging = pagination(params);
   const [rows, total, groups] = await Promise.all([
     db.documentationFolder.findMany({ where, select: {
-      id: true, status: true, createdAt: true, updatedAt: true, broker: { select: { name: true } },
+      id: true, status: true, createdAt: true, updatedAt: true, responsiblePerson: { select: { name: true } }, broker: { select: { name: true } },
       people: { where: { relationship: "TITULAR" }, select: { name: true, cpf: true }, take: 1 },
       rounds: { orderBy: { sequence: "desc" }, take: 1, select: { sentAt: true } },
       _count: { select: { documents: { where: { status: "ACTIVE" } }, pendingItems: { where: { status: "OPEN" } } } },
@@ -25,5 +25,5 @@ export async function correspondentFolders(session: DocumentationViewer, params:
     db.documentationFolder.count({ where }),
     db.documentationFolder.groupBy({ by: ["status"], orderBy: { status: "asc" }, where: base, _count: { _all: true } }),
   ]);
-  return { items: rows.map(row => ({ ...row, people: row.people.map(person => ({ name: person.name, cpfDisplay: maskDocumentationCpf(person.cpf) })) })), total, groups, page: paging.page, pageSize: paging.take };
+  return { items: rows.map(row => ({ ...row, broker: row.responsiblePerson ?? row.broker, people: row.people.map(person => ({ name: person.name, cpfDisplay: maskDocumentationCpf(person.cpf) })) })), total, groups, page: paging.page, pageSize: paging.take };
 }

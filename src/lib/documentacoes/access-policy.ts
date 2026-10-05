@@ -17,11 +17,15 @@ const submittedStates: DocumentationFolderStatus[] = [
 ];
 
 /** Mandatory base scope for future queries, never just a folder ID. */
+export function commercialOwnershipScope(userId: string) {
+  return { OR: [{ responsiblePerson: { user: { id: userId } } }, { responsiblePersonId: null, brokerId: userId }] };
+}
+
 export function documentationFolderScope(session: DocumentationViewer) {
   const tenantId = session.tenant.id;
   if (session.tenant.isPlatform || session.user.tenantId !== tenantId) return { tenantId, id: { in: [] as string[] } };
   if (canManageDocumentation(session)) return { tenantId };
-  if (session.user.role === "BROKER") return { tenantId, brokerId: session.user.id };
+  if (session.user.role === "BROKER") return { tenantId, ...commercialOwnershipScope(session.user.id) };
   if (session.user.role === "CORRESPONDENTE") {
     return { tenantId, correspondentId: session.user.id, status: { in: submittedStates },
       rounds: { some: { tenantId, correspondentId: session.user.id } } };

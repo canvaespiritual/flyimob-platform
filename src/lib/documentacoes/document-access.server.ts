@@ -1,10 +1,10 @@
 import { getSessionUser } from "@/lib/session.server";
-import { canManageDocumentation, type DocumentationViewer } from "./access-policy";
+import { canManageDocumentation, commercialOwnershipScope, type DocumentationViewer } from "./access-policy";
 import { DocumentationError } from "./validation";
 export function documentScope(session: DocumentationViewer) {
   const tenantId = session.tenant.id;
   if (canManageDocumentation(session)) return { tenantId };
-  if (!session.tenant.isPlatform && session.user.tenantId === tenantId && session.user.role === "BROKER") return { tenantId, brokerId: session.user.id };
+  if (!session.tenant.isPlatform && session.user.tenantId === tenantId && session.user.role === "BROKER") return { tenantId, ...commercialOwnershipScope(session.user.id) };
   if (!session.tenant.isPlatform && session.user.tenantId === tenantId && session.user.role === "CORRESPONDENTE") return { tenantId, correspondentId: session.user.id };
   throw new DocumentationError(403, "Você não possui acesso documental.");
 }

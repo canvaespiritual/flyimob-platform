@@ -13,6 +13,7 @@ const correspondent: DocumentationViewer = { ...owner, user: { id: "c", tenantId
 const broker: DocumentationViewer = { ...owner, user: { id: "b", tenantId: "t", role: "BROKER" } };
 function matches(row: Row, where: Row = {}): boolean {
   return Object.entries(where).every(([key, expected]) => {
+    if (key === "OR") return (expected as Row[]).some(clause => matches(row, clause));
     const actual = row[key];
     if (expected && typeof expected === "object" && !(expected instanceof Date)) {
       const filter = expected as Row;
@@ -25,7 +26,7 @@ function matches(row: Row, where: Row = {}): boolean {
 }
 function fixture() {
   let tables: Record<string, Row[]> = {
-    documentationFolder: [{ id: "f", tenantId: "t", brokerId: "b", correspondentId: "c", version: 0, status: "EM_MONTAGEM" }],
+    documentationFolder: [{ id: "f", tenantId: "t", brokerId: "b", responsiblePersonId: null, correspondentId: "c", version: 0, status: "EM_MONTAGEM" }],
     user: [{ id: "c", tenantId: "t", role: "CORRESPONDENTE", isActive: true }],
     documentationDocument: [{ id: "d", tenantId: "t", folderId: "f", personId: "p", documentTypeId: "type", status: "ACTIVE", checksum: "valid" }],
     documentationPerson: [{ id: "p", tenantId: "t", folderId: "f" }], documentationDocumentType: [{ id: "type", tenantId: "t", isActive: true }],
@@ -151,7 +152,7 @@ test("workflow read uses broker assignment and explicit public projections, with
   const calls: Args[] = [];
   const db = {
     documentationFolder: { findFirst: async (args: Args & { select: Row }) => {
-      assert.equal(args.where?.tenantId, "t"); assert.equal(args.where?.brokerId, "b");
+      assert.equal(args.where?.tenantId, "t"); assert.deepEqual(args.where?.OR, [{ responsiblePerson: { user: { id: "b" } } }, { responsiblePersonId: null, brokerId: "b" }]);
       assert.equal(args.select.administrativeObservation, undefined); assert.equal((args.select.people as { select: Row }).select.cpf, undefined);
       return { id: "f", status: "EM_MONTAGEM", version: 0, correspondentId: "c", broker: { name: "Synthetic" }, people: [] };
     } },

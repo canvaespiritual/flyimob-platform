@@ -27,7 +27,7 @@ export function documentationDate(value: Date | string) {
 }
 export const documentationEventLabels: Record<string, string> = {
   FOLDER_CREATED: "Cliente cadastrado para documentação", FOLDER_UPDATED: "Dados do cliente atualizados",
-  BROKER_ASSIGNED: "Corretor responsável definido", CORRESPONDENT_ASSIGNED: "Correspondente responsável definido", CORRESPONDENT_CHANGED: "Correspondente responsável alterado",
+  BROKER_ASSIGNED: "Responsável comercial definido", CORRESPONDENT_ASSIGNED: "Correspondente responsável definido", CORRESPONDENT_CHANGED: "Correspondente responsável alterado",
   PERSON_ADDED: "Pessoa adicionada", PERSON_UPDATED: "Dados de uma pessoa atualizados", PERSON_REMOVED: "Pessoa removida",
   DOCUMENT_UPLOAD_STARTED: "Envio de documento iniciado", DOCUMENT_ADDED: "Documento anexado", DOCUMENT_INVALIDATED: "Documento retirado da análise", DOCUMENT_REPLACED: "Documento corrigido",
   DOCUMENT_REVIEW_SUBMITTED: "Documentação enviada para análise", DOCUMENT_REVIEW_RESUBMITTED: "Documentação corrigida reenviada",

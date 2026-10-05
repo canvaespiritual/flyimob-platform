@@ -31,6 +31,7 @@ function fakeDB(overrides: Record<string, unknown> = {}) {
   const events: Record<string, unknown>[] = []; const folders: Record<string, unknown>[] = [];
   const current = { id: "folder-a", tenantId: "tenant-a", version: 2, status: "EM_MONTAGEM", brokerId: "broker-a", correspondentId: null, crmLeadId: null, construtoraId: null, empreendimentoId: null, administrativeObservation: null };
   const tx = {
+    operationPerson: { findFirst: async ({ where }: Args) => where.id === "foreign" ? null : { id: where.id, active: true, mergedIntoId: null, operationalRole: "BROKER", user: { id: where.id } } },
     user: { findFirst: async ({ where }: Args) => where.id === "foreign" ? null : { id: where.id } },
     cRMLead: { findFirst: async () => null }, construtora: { findFirst: async () => null }, empreendimento: { findFirst: async () => null },
     documentationFolder: { findFirst: async ({ where }: Args) => where.id === "foreign" ? null : current,

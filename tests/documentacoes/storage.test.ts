@@ -34,7 +34,7 @@ function harness() {
   const folder = { id: "folder-a", tenantId: "tenant-a", brokerId: "broker-a", correspondentId: "correspondent-a", status: "EM_MONTAGEM", version: 0 };
   const matches = (where: Where, row: { id: string; tenantId: string; folderId?: string; status?: string; uploadedById?: string }) => ["id", "tenantId", "folderId", "status", "uploadedById"].every(key => where[key] === undefined || typeof where[key] === "object" || where[key] === row[key as keyof typeof row]);
   const tx = {
-    documentationFolder: { findFirst: async ({ where }: Args) => matches(where, folder) && (!where.correspondentId || where.correspondentId === folder.correspondentId) && (!where.brokerId || where.brokerId === folder.brokerId) ? { ...folder, version } : null,
+    documentationFolder: { findFirst: async ({ where }: Args) => matches(where, folder) && (!where.correspondentId || where.correspondentId === folder.correspondentId) && (!where.brokerId || where.brokerId === folder.brokerId) && (!where.OR || (where.OR as Where[]).some(clause => clause.brokerId === folder.brokerId)) ? { ...folder, version } : null,
       updateMany: async ({ where }: Args) => { if (where.version !== version) return { count: 0 }; version++; return { count: 1 }; } },
     documentationPerson: { findFirst: async ({ where }: Args) => where.id === "person-a" && where.tenantId === "tenant-a" && where.folderId === "folder-a" ? { id: "person-a" } : null, findMany: async () => [] },
     documentationDocumentType: { findFirst: async ({ where }: Args) => where.id === "type-a" && where.tenantId === "tenant-a" ? { id: "type-a" } : null, findMany: async () => [] },
@@ -73,7 +73,7 @@ test("bounded request reading rejects over-limit and incomplete streams", async 
 });
 test("document access is assignment-scoped without granting analysis/admin access", () => {
   assert.deepEqual(documentScope(correspondent), { tenantId: "tenant-a", correspondentId: "correspondent-a" });
-  assert.deepEqual(documentScope({ ...owner, user: { ...owner.user, role: "BROKER" } }), { tenantId: "tenant-a", brokerId: owner.user.id });
+  assert.deepEqual(documentScope({ ...owner, user: { ...owner.user, role: "BROKER" } }), { tenantId: "tenant-a", OR: [{ responsiblePerson: { user: { id: owner.user.id } } }, { responsiblePersonId: null, brokerId: owner.user.id }] });
   for (const denied of [{ ...owner, user: { ...owner.user, role: "MANAGER" as const } }, { ...owner, tenant: { ...owner.tenant, isPlatform: true } }, { ...correspondent, user: { ...correspondent.user, tenantId: "foreign" } }]) assert.throws(() => documentScope(denied));
   assert.throws(() => sameOrigin(new Request("https://local.test/api", { headers: { origin: "https://evil.test" } })));
 });

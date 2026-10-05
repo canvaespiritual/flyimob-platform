@@ -17,6 +17,8 @@ export function folderFilters(tenantId: string, params: URLSearchParams): Prisma
     if (!Object.values(DocumentationFolderStatus).includes(status as DocumentationFolderStatus)) throw new DocumentationError(400, "Status inválido.");
     where.status = status as DocumentationFolderStatus;
   }
+  const responsible = text(params.get("responsiblePersonId"), "Responsável comercial");
+  if (responsible) where.responsiblePersonId = responsible;
   for (const key of ["brokerId", "correspondentId"] as const) {
     const value = text(params.get(key), "Responsável");
     if (value) where[key] = value;
@@ -34,12 +36,12 @@ export async function listFolders(tenantId: string, params: URLSearchParams) {
     prisma.documentationFolder.count({ where }),
     prisma.documentationFolder.groupBy({ by: ["status"], orderBy: { status: "asc" }, where, _count: { _all: true } }),
   ]);
-  return { items, total, page: paging.page, pageSize: paging.take, groups };
+  return { items: items.map(row => ({ ...row, broker: row.responsiblePerson ?? row.broker })), total, page: paging.page, pageSize: paging.take, groups };
 }
 export async function folderDetail(tenantId: string, id: string, params: URLSearchParams) {
   const paging = pagination(params);
   const folder = await prisma.documentationFolder.findFirst({ where: { tenantId, id }, include: {
-    people: { orderBy: { createdAt: "asc" } }, broker: { select: { id: true, name: true } }, correspondent: { select: { id: true, name: true, email: true, isActive: true, updatedAt: true } },
+    people: { orderBy: { createdAt: "asc" } }, responsiblePerson: { select: { id: true, name: true } }, broker: { select: { id: true, name: true } }, correspondent: { select: { id: true, name: true, email: true, isActive: true, updatedAt: true } },
     construtora: { select: { id: true, name: true } }, empreendimento: { select: { id: true, name: true } },
   } });
   if (!folder) throw new DocumentationError(404, "Pasta não encontrada.");
@@ -49,5 +51,5 @@ export async function folderDetail(tenantId: string, id: string, params: URLSear
     prisma.documentationDocumentType.findMany({ where: { tenantId, isActive: true }, orderBy: [{ sortOrder: "asc" }, { name: "asc" }] }),
   ]);
   const documentCount = await prisma.documentationDocument.count({ where: { tenantId, folderId: id, status: "ACTIVE" } });
-  return { folder, events, eventCount, types, documentCount, page: paging.page };
+  return { folder: { ...folder, broker: folder.responsiblePerson ?? folder.broker }, events, eventCount, types, documentCount, page: paging.page };
 }

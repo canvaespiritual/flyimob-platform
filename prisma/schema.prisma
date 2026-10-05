@@ -40,6 +40,7 @@ model OperationPerson {
   mergedFrom OperationPerson[] @relation("PersonMerge")
   user User?
   financialParticipant FinancialParticipant?
+  documentationFolders DocumentationFolder[]
   assignments CampaignBrokerAssignment[]
   @@unique([tenantId, id])
   @@index([tenantId, active])
@@ -2335,7 +2336,8 @@ model DocumentationFolder {
   id String @id @default(cuid())
   tenantId String
   crmLeadId String?
-  brokerId String
+  brokerId String?
+  responsiblePersonId String?
   correspondentId String?
   construtoraId String?
   empreendimentoId String?
@@ -2348,7 +2350,8 @@ model DocumentationFolder {
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   crmLead CRMLead? @relation(fields: [tenantId, crmLeadId], references: [tenantId, id], onDelete: Restrict)
-  broker User @relation("DocumentationBroker", fields: [tenantId, brokerId], references: [tenantId, id], onDelete: Restrict)
+  responsiblePerson OperationPerson? @relation(fields: [tenantId, responsiblePersonId], references: [tenantId, id], onDelete: Restrict)
+  broker User? @relation("DocumentationBroker", fields: [tenantId, brokerId], references: [tenantId, id], onDelete: Restrict)
   correspondent User? @relation("DocumentationCorrespondent", fields: [tenantId, correspondentId], references: [tenantId, id], onDelete: Restrict)
   createdBy User @relation("DocumentationCreator", fields: [tenantId, createdById], references: [tenantId, id], onDelete: Restrict)
   construtora Construtora? @relation(fields: [tenantId, construtoraId], references: [tenantId, id], onDelete: Restrict)
@@ -2363,6 +2366,7 @@ model DocumentationFolder {
 
   @@unique([tenantId, id])
   @@index([tenantId, status, createdAt])
+  @@index([tenantId, responsiblePersonId])
   @@index([tenantId, brokerId])
   @@index([tenantId, correspondentId, status])
   @@index([tenantId, crmLeadId])

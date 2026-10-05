@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { authorize, civilToday, day, MarketingError, period, type MarketingViewer } from "./policy";
 import { summarize } from "./metrics.server";
 import { configurationStatus } from "./connections.server";
+import { canActAsSalesResponsible } from "@/lib/team/policy";
 import { people } from "@/lib/team/service.server";
 
 export function metaStatusWhere(status: "ACTIVE" | "PAUSED" | "OTHER"): Prisma.MarketingCampaignWhereInput {
@@ -21,7 +22,7 @@ export async function options(viewer: MarketingViewer, db = prisma) {
     db.metaAdAccount.findMany({ where: { tenantId }, select: { id: true, name: true, currency: true, timezone: true }, orderBy: { name: "asc" } }),
     people(tenantId, db),
   ]);
-  return { accounts, brokers: brokers.map(p => ({ id: p.id, name: p.name, operationalRole: p.operationalRole, isActive: p.eligible })) };
+  return { accounts, brokers: brokers.map(p => ({ id: p.id, name: p.name, operationalRole: p.operationalRole, isActive: canActAsSalesResponsible(p) })) };
 }
 export async function campaignList(viewer: MarketingViewer, params: URLSearchParams, db = prisma) {
   authorize(viewer); const tenantId = viewer.tenant.id;

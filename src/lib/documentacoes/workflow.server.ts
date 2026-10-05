@@ -107,7 +107,7 @@ export async function workflowMutation(session: DocumentationViewer, folderId: s
 
 export async function workflowView(session: DocumentationViewer, folderId: string, params: URLSearchParams, db = prisma) {
   const scope = documentScope(session);
-  const folder = await db.documentationFolder.findFirst({ where: { id: folderId, ...scope }, select: { id: true, status: true, version: true, correspondentId: true, broker: { select: { name: true } }, people: { select: { id: true, name: true, relationship: true } } } });
+  const folder = await db.documentationFolder.findFirst({ where: { id: folderId, ...scope }, select: { id: true, status: true, version: true, correspondentId: true, responsiblePerson: { select: { name: true } }, broker: { select: { name: true } }, people: { select: { id: true, name: true, relationship: true } } } });
   if (!folder) throw new DocumentationError(404, "Pasta não encontrada.");
   const page = Number(params.get("page") ?? 1); const issuePage = Number(params.get("issuePage") ?? 1);
   if (![page, issuePage].every(value => Number.isSafeInteger(value) && value > 0 && value <= 100000)) throw new DocumentationError(400, "Página inválida.");
