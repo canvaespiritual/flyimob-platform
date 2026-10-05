@@ -1,6 +1,7 @@
 import { Prisma, MarketingPurpose, MarketingTrackingStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { authorize, civilToday, day, MarketingError, period, type MarketingViewer } from "./policy";
+import { applyCostCorrections, costCorrectionEvent } from "./cost-corrections.server";
 import { summarize } from "./metrics.server";
 import { configurationStatus } from "./connections.server";
 import { canActAsSalesResponsible } from "@/lib/team/policy";
@@ -75,6 +76,10 @@ export async function campaignDetail(viewer: MarketingViewer, id: string, params
   return { campaign, assignments: assignments.map(identity), page, total };
 }
 export async function overview(viewer: MarketingViewer, params: URLSearchParams, db = prisma) {
+  authorize(viewer);
+  return db.$transaction(tx => overviewReport(viewer, params, tx), { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead });
+}
+async function overviewReport(viewer: MarketingViewer, params: URLSearchParams, db: Prisma.TransactionClient) {
   authorize(viewer); const tenantId = viewer.tenant.id;
   const selectedAccount = params.get("accountId") ? await db.metaAdAccount.findFirst({ where: { tenantId, id: params.get("accountId")! }, select: { timezone: true } }) : null;
   const range = period(params, civilToday(selectedAccount?.timezone ?? "America/Sao_Paulo"));
@@ -88,8 +93,12 @@ export async function overview(viewer: MarketingViewer, params: URLSearchParams,
   const rows = await db.marketingDailyMetric.findMany({ where, select: { date: true, currency: true, state: true, metaSpend: true, effectiveSpend: true, leads: true, impressions: true, clicks: true, linkClicks: true,
     campaign: { select: { id: true, name: true, purpose: true, sourceStatus: true, effectiveStatus: true, account: { select: { name: true, timezone: true } }, assignments: { where: { tenantId, cancelledAt: null, validFrom: { lte: day(range.to) }, OR: [{ validTo: null }, { validTo: { gt: day(range.from) } }] }, select: { ...identitySelect, validFrom: true, validTo: true } } } },
   } });
+  const corrections = rows.length ? await db.marketingAuditEvent.findMany({ where: { tenantId, eventType: costCorrectionEvent,
+    AND: [{ metadata: { path: ["after", "affectedFrom"], lte: range.to } }, { metadata: { path: ["after", "affectedTo"], gt: range.from } }] }, select: { metadata: true } }) : [];
+  const rules = corrections.length ? await db.marketingCostRule.findMany({ where: { tenantId }, select: { id: true, percentage: true, validFrom: true, validTo: true }, orderBy: { validFrom: "asc" } }) : [];
+  const reportRows = applyCostCorrections(rows.map(row => ({ ...row, campaign: { ...row.campaign, sourceStatus: row.campaign.effectiveStatus ?? row.campaign.sourceStatus, assignments: row.campaign.assignments.map(identity) } })), rules, corrections);
   const latest = await db.metaAdAccount.aggregate({ where: { tenantId, ...(params.get("accountId") ? { id: params.get("accountId")! } : {}) }, _max: { lastSyncedAt: true } });
-  return { ...summarize(rows.map(row => ({ ...row, campaign: { ...row.campaign, sourceStatus: row.campaign.effectiveStatus ?? row.campaign.sourceStatus, assignments: row.campaign.assignments.map(identity) } })), params.get("brokerId") || undefined), ...range, purpose, lastSyncedAt: latest._max.lastSyncedAt,
+  return { ...summarize(reportRows, params.get("brokerId") || undefined), ...range, purpose, lastSyncedAt: latest._max.lastSyncedAt,
     canSync: viewer.user.role === "OWNER", preferenceKey: `${tenantId}:${viewer.user.id}`, hasAnyMetrics: rows.length > 0,
     timezoneNote: `Datas representam dias locais das contas. Atalhos usam ${selectedAccount?.timezone ?? "America/Sao_Paulo (visão de várias contas)"}.` };
 }
