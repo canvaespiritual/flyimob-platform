@@ -1,6 +1,257 @@
 generator client {
   provider = "prisma-client-js"
 }
+enum MetaConnectionStatus {
+  NOT_CONFIGURED
+  AUTHORIZED
+  EXPIRED
+  REVOKED
+  ERROR
+}
+enum MarketingTrackingStatus {
+  ACTIVE
+  PAUSED
+  ARCHIVED
+}
+enum MarketingPurpose {
+  CLIENTES
+  RECRUTAMENTO
+  INSTITUCIONAL_OUTRO
+  NAO_CLASSIFICADA
+}
+enum MarketingMetricState {
+  CONFIRMED
+  MISSING
+  FAILED
+}
+enum MarketingSyncStatus {
+  PENDING
+  RUNNING
+  SUCCEEDED
+  FAILED
+  CANCELLED
+}
+model MetaConnection {
+  id String @id @default(cuid())
+  tenantId String
+  label String
+  externalAuthorizationId String?
+  status MetaConnectionStatus @default(NOT_CONFIGURED)
+  authorizedAt DateTime?
+  expiresAt DateTime?
+  revokedAt DateTime?
+  lastSyncedAt DateTime?
+  safeErrorCode String? @db.VarChar(80)
+  credentialVersion Int @default(0)
+  // AES-256-GCM credential envelope; never exposed in administrative projections.
+  credentialCiphertext Bytes?
+  credentialNonce Bytes?
+  credentialAuthTag Bytes?
+  credentialKeyVersion String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  accounts MetaConnectionAccount[]
+  oauthStates MarketingOAuthState[]
+  syncRuns MarketingSyncRun[]
+  @@unique([tenantId, id])
+  @@index([tenantId, status])
+}
+model MetaAdAccount {
+  id String @id @default(cuid())
+  tenantId String
+  externalId String @db.VarChar(120)
+  name String
+  currency String @db.Char(3)
+  timezone String @db.VarChar(80)
+  businessExternalId String? @db.VarChar(120)
+  businessName String?
+  sourceAccountStatus Int?
+  status MarketingTrackingStatus @default(ACTIVE)
+  lastSyncedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  connections MetaConnectionAccount[]
+  campaigns MarketingCampaign[]
+  syncRuns MarketingSyncRun[]
+  @@unique([tenantId, id])
+  @@unique([tenantId, externalId])
+}
+model MetaConnectionAccount {
+  id String @id @default(cuid())
+  tenantId String
+  connectionId String
+  accountId String
+  selected Boolean @default(false)
+  accessible Boolean @default(true)
+  discoveredAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  connection MetaConnection @relation(fields: [tenantId, connectionId], references: [tenantId, id], onDelete: Restrict)
+  account MetaAdAccount @relation(fields: [tenantId, accountId], references: [tenantId, id], onDelete: Restrict)
+  @@unique([tenantId, connectionId, accountId])
+  @@index([tenantId, accountId])
+}
+model MarketingCampaign {
+  id String @id @default(cuid())
+  tenantId String
+  accountId String
+  externalId String @db.VarChar(120)
+  name String
+  sourceStatus String? @db.VarChar(40)
+  effectiveStatus String? @db.VarChar(40)
+  trackingStatus MarketingTrackingStatus @default(ACTIVE)
+  purpose MarketingPurpose @default(NAO_CLASSIFICADA)
+  version Int @default(0)
+  sourceCreatedAt DateTime?
+  lastSyncedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  account MetaAdAccount @relation(fields: [tenantId, accountId], references: [tenantId, id], onDelete: Restrict)
+  assignments CampaignBrokerAssignment[]
+  metrics MarketingDailyMetric[]
+  adMetrics MarketingAdDailyMetric[]
+  @@unique([tenantId, id])
+  @@unique([tenantId, accountId, externalId])
+  @@index([tenantId, trackingStatus, purpose])
+}
+model CampaignBrokerAssignment {
+  id String @id @default(cuid())
+  tenantId String
+  campaignId String
+  brokerId String
+  validFrom DateTime @db.Date
+  validTo DateTime? @db.Date
+  createdById String
+  reason String? @db.VarChar(500)
+  cancelledAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  campaign MarketingCampaign @relation(fields: [tenantId, campaignId], references: [tenantId, id], onDelete: Restrict)
+  broker User @relation("MarketingBroker", fields: [tenantId, brokerId], references: [tenantId, id], onDelete: Restrict)
+  createdBy User @relation("MarketingAssignmentCreator", fields: [tenantId, createdById], references: [tenantId, id], onDelete: Restrict)
+  @@index([tenantId, campaignId, validFrom])
+  @@index([tenantId, brokerId, validFrom, validTo])
+}
+model MarketingCostRule {
+  id String @id @default(cuid())
+  tenantId String
+  percentage Decimal @db.Decimal(10, 6)
+  validFrom DateTime @db.Date
+  validTo DateTime? @db.Date
+  createdById String
+  createdAt DateTime @default(now())
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  createdBy User @relation(fields: [tenantId, createdById], references: [tenantId, id], onDelete: Restrict)
+  metrics MarketingDailyMetric[]
+  @@unique([tenantId, id])
+  @@unique([tenantId, validFrom])
+}
+model MarketingDailyMetric {
+  id String @id @default(cuid())
+  tenantId String
+  campaignId String
+  date DateTime @db.Date
+  metaSpend Decimal? @db.Decimal(18, 2)
+  leads Int?
+  impressions BigInt?
+  clicks BigInt?
+  linkClicks BigInt?
+  currency String @db.Char(3)
+  state MarketingMetricState @default(MISSING)
+  // Rule snapshot is immutable across resynchronizations of this business day.
+  costRuleId String?
+  costPercentage Decimal? @db.Decimal(10, 6)
+  effectiveSpend Decimal? @db.Decimal(18, 2)
+  sourceObservedAt DateTime?
+  syncedAt DateTime?
+  lastAttemptAt DateTime?
+  syncRunId String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  campaign MarketingCampaign @relation(fields: [tenantId, campaignId], references: [tenantId, id], onDelete: Restrict)
+  costRule MarketingCostRule? @relation(fields: [tenantId, costRuleId], references: [tenantId, id], onDelete: Restrict)
+  syncRun MarketingSyncRun? @relation(fields: [tenantId, syncRunId], references: [tenantId, id], onDelete: Restrict)
+  @@unique([tenantId, campaignId, date])
+  @@index([tenantId, date, state])
+}
+model MarketingSyncRun {
+  id String @id @default(cuid())
+  tenantId String
+  connectionId String
+  accountId String
+  idempotencyKey String @db.VarChar(200)
+  periodFrom DateTime @db.Date
+  periodTo DateTime @db.Date
+  status MarketingSyncStatus @default(PENDING)
+  attempts Int @default(0)
+  maxAttempts Int @default(5)
+  nextAttemptAt DateTime @default(now())
+  claimedAt DateTime?
+  leaseToken String?
+  startedAt DateTime?
+  finishedAt DateTime?
+  safeErrorCode String? @db.VarChar(80)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  connection MetaConnection @relation(fields: [tenantId, connectionId], references: [tenantId, id], onDelete: Restrict)
+  account MetaAdAccount @relation(fields: [tenantId, accountId], references: [tenantId, id], onDelete: Restrict)
+  metrics MarketingDailyMetric[]
+  adMetrics MarketingAdDailyMetric[]
+  @@unique([tenantId, id])
+  @@unique([tenantId, accountId, idempotencyKey])
+  @@index([status, nextAttemptAt])
+}
+model MarketingAuditEvent {
+  id String @id @default(cuid())
+  tenantId String
+  actorId String
+  eventType String @db.VarChar(80)
+  entityId String
+  metadata Json
+  createdAt DateTime @default(now())
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  actor User @relation(fields: [tenantId, actorId], references: [tenantId, id], onDelete: Restrict)
+  @@index([tenantId, createdAt])
+}
+
+// OAuth state contains a hash only. Credentials remain in the existing encrypted envelope.
+model MarketingOAuthState {
+  id String @id
+  tenantId String
+  actorId String
+  connectionId String
+  credentialVersion Int
+  expiresAt DateTime
+  consumedAt DateTime?
+  createdAt DateTime @default(now())
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  actor User @relation(fields: [tenantId, actorId], references: [tenantId, id], onDelete: Restrict)
+  connection MetaConnection @relation(fields: [tenantId, connectionId], references: [tenantId, id], onDelete: Restrict)
+  @@index([expiresAt])
+}
+
+// Minimal historical ad identity: one row per ad/day, creative identity at observation time.
+model MarketingAdDailyMetric {
+  id String @id @default(cuid())
+  tenantId String
+  campaignId String
+  adSetExternalId String @db.VarChar(120)
+  adExternalId String @db.VarChar(120)
+  creativeExternalId String? @db.VarChar(120)
+  date DateTime @db.Date
+  currency String @db.Char(3)
+  metaSpend Decimal @db.Decimal(18, 2)
+  conversations Int
+  sourceObservedAt DateTime
+  syncRunId String
+  campaign MarketingCampaign @relation(fields: [tenantId, campaignId], references: [tenantId, id], onDelete: Restrict)
+  syncRun MarketingSyncRun @relation(fields: [tenantId, syncRunId], references: [tenantId, id], onDelete: Restrict)
+  @@unique([tenantId, adExternalId, date])
+  @@index([tenantId, campaignId, date])
+  @@index([tenantId, creativeExternalId, date])
+}
 
 datasource db {
   provider = "postgresql"
@@ -311,6 +562,12 @@ model Tenant {
   financialDocuments    FinancialDocument[]
   documentationFolders DocumentationFolder[]
   documentationDocumentTypes DocumentationDocumentType[]
+  metaConnections MetaConnection[]
+  marketingOAuthStates MarketingOAuthState[]
+  metaAdAccounts MetaAdAccount[]
+  marketingCampaigns MarketingCampaign[]
+  marketingCostRules MarketingCostRule[]
+  marketingAuditEvents MarketingAuditEvent[]
 }
 
 model User {
@@ -354,6 +611,11 @@ model User {
   documentationResolvedPendingItems DocumentationPendingItem[] @relation("DocumentationPendingResolver")
   documentationComments DocumentationComment[]
   documentationEvents DocumentationEvent[]
+  marketingAssignments CampaignBrokerAssignment[] @relation("MarketingBroker")
+  marketingOAuthStates MarketingOAuthState[]
+  marketingAssignmentsCreated CampaignBrokerAssignment[] @relation("MarketingAssignmentCreator")
+  marketingCostRulesCreated MarketingCostRule[]
+  marketingAuditEvents MarketingAuditEvent[]
 
   @@unique([tenantId, id])
   @@index([tenantId])

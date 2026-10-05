@@ -118,6 +118,10 @@ if (
   return [
     ...base,
     {
+      href: "/admin/marketing",
+      label: "Marketing",
+    },
+    {
       href: "/admin/financeiro",
       label: "Financeiro",
     },
