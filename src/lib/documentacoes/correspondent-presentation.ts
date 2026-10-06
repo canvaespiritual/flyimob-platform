@@ -22,10 +22,15 @@ export function maskDocumentationCpf(cpf?: string | null) {
   const digits = cpf?.replace(/\D/g, "");
   return digits?.length === 11 ? `***.***.${digits.slice(6, 9)}-**` : "Não informado";
 }
+export function formatDocumentationCpf(cpf?: string | null) {
+  const digits = cpf?.replace(/\D/g, "");
+  return digits?.length === 11 ? `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6, 9)}-${digits.slice(9)}` : "Não informado";
+}
 export function documentationDate(value: Date | string) {
   return new Date(value).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", dateStyle: "short", timeStyle: "short" });
 }
 export const documentationEventLabels: Record<string, string> = {
+  CORRESPONDENT_MESSAGE_UPDATED: "Mensagem para o correspondente atualizada",
   FOLDER_CREATED: "Cliente cadastrado para documentação", FOLDER_UPDATED: "Dados do cliente atualizados",
   BROKER_ASSIGNED: "Responsável comercial definido", CORRESPONDENT_ASSIGNED: "Correspondente responsável definido", CORRESPONDENT_CHANGED: "Correspondente responsável alterado",
   PERSON_ADDED: "Pessoa adicionada", PERSON_UPDATED: "Dados de uma pessoa atualizados", PERSON_REMOVED: "Pessoa removida",

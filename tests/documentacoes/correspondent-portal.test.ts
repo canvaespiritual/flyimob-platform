@@ -20,7 +20,7 @@ const owner = { ...viewer, user: { ...viewer.user, id: "owner-a", role: "OWNER" 
 type Query = { where: Record<string, unknown>; select?: Record<string, unknown>; data?: Record<string, unknown>; take?: number; skip?: number; orderBy?: unknown };
 function listDB() {
   const calls: Query[] = [];
-  const rows = [{ id: "folder-a", status: "EM_REANALISE", createdAt: new Date("2026-10-01"), updatedAt: new Date("2026-10-03"), people: [{ name: "Pessoa sintética", cpf: "52998224725" }], broker: { name: "Corretor sintético" }, rounds: [], _count: { documents: 11, pendingItems: 0 } }];
+  const rows = [{ id: "folder-a", status: "EM_REANALISE", createdAt: new Date("2026-10-01"), updatedAt: new Date("2026-10-03"), correspondentMessage: "Profissão e dependentes sintéticos", people: [{ name: "Pessoa sintética", cpf: "52998224725", email: "synthetic@example.test", phone: "11900000000" }], broker: { name: "Corretor sintético" }, rounds: [], _count: { documents: 11, pendingItems: 0 } }];
   const folder = {
     findMany: async (args: Query) => { calls.push(args); return rows; },
     count: async (args: Query) => { calls.push(args); return 41; },
@@ -43,7 +43,8 @@ test("correspondent listing keeps tenant/assignment on rows, totals and queues, 
   for (const call of fake.calls) { assert.equal(call.where.tenantId, "tenant-a"); assert.equal(call.where.correspondentId, "corr-a"); assert.equal(call.where.brokerId, undefined); }
   assert.deepEqual(fake.calls[0].orderBy, [{ updatedAt: "desc" }, { id: "desc" }]);
   assert.equal(fake.calls[0].take, 20); assert.equal(fake.calls[0].skip, 0);
-  assert.equal(result.total, 41); assert.equal(result.items[0].people[0].cpfDisplay, "***.***.247-**");
+  assert.equal(result.items[0].people[0].email, "synthetic@example.test"); assert.equal(result.items[0].people[0].phone, "11900000000"); assert.equal(result.items[0].correspondentMessage, "Profissão e dependentes sintéticos"); assert.equal(fake.calls[0].select?.administrativeObservation, undefined);
+  assert.equal(result.total, 41); assert.equal(result.items[0].people[0].cpfDisplay, "529.982.247-25");
   const serialized = JSON.stringify(result); assert.equal(serialized.includes("52998224725"), false); assert.equal(serialized.includes("storageKey"), false);
 });
 test("name search is insensitive and CPF search strips punctuation within the same scope", async () => {
@@ -134,7 +135,7 @@ test("client timeline enforces assignment before reading events and masks CPF at
   mock(t, prisma.documentationEvent, "count", async () => 21);
   const request = new Request("https://flyimob.test/api/client?page=2"); const context = { params: Promise.resolve({ id: "folder-a" }) };
   const response = await requestContext(token("CORRESPONDENTE"), () => clientDetails(request, context));
-  assert.equal(response.status, 200); const result = await response.json(); assert.equal(result.folder.people[0].cpf, undefined); assert.equal(result.folder.people[0].cpfDisplay, "***.***.247-**"); assert.equal(result.eventCount, 21);
+  assert.equal(response.status, 200); const result = await response.json(); assert.equal(result.folder.people[0].cpf, undefined); assert.equal(result.folder.people[0].cpfDisplay, "529.982.247-25"); assert.equal(result.eventCount, 21);
   visible = false; assert.equal((await requestContext(token("CORRESPONDENTE"), () => clientDetails(request, context))).status, 404); assert.equal(eventsRead, 1);
   assert.equal((await requestContext(undefined, () => clientDetails(request, context))).status, 401);
   mock(t, prisma.user, "findFirst", async () => account("OWNER"));
@@ -145,6 +146,6 @@ test("home renders task links, masked CPF and pagination preserving active searc
   for (const key of ["findMany", "count", "groupBy"] as const) mock(t, prisma.documentationFolder, key, fake.folder[key]);
   const page = await requestContext(token("CORRESPONDENTE"), () => CorrespondentePage({ searchParams: Promise.resolve({ q: "Pessoa", queue: "issues", page: "2" }) }));
   const html = renderToStaticMarkup(page);
-  for (const expected of ["Seus clientes", "Buscar cliente", "Nome ou CPF", "***.***.247-**", "Ver e baixar documentos", "Reanalisar", "tab=pendencias", "Próxima", "page=3", "queue=issues", "q=Pessoa"]) assert.ok(html.includes(expected), expected);
+  for (const expected of ["Seus clientes", "Buscar cliente", "Nome ou CPF", "529.982.247-25", "Ver e baixar documentos", "Reanalisar", "tab=pendencias", "Próxima", "page=3", "queue=issues", "q=Pessoa"]) assert.ok(html.includes(expected), expected);
   assert.equal(html.includes("52998224725"), false); assert.equal(html.includes("Abrir pasta"), false); assert.equal(html.includes("Rodada"), false);
 });

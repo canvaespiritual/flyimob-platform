@@ -4,7 +4,7 @@ import { test, type TestContext } from "node:test";
 import { Prisma, type UserRole } from "@prisma/client";
 import { prisma } from "../../src/lib/prisma";
 import { createSessionToken, verifyPassword } from "../../src/lib/auth.server";
-import { createFolder, updateFolder, mutatePerson, ensureCatalog } from "../../src/lib/documentacoes/folders.server";
+import { createFolder, updateFolder, mutatePerson, ensureCatalog, updateCorrespondentMessage } from "../../src/lib/documentacoes/folders.server";
 import { initialCatalog } from "../../src/lib/documentacoes/catalog";
 import { folderFilters, pagination } from "../../src/lib/documentacoes/queries.server";
 import { personInput, cpf } from "../../src/lib/documentacoes/validation";
@@ -218,4 +218,43 @@ test("minimal correspondent page queries exclusively own assignments without CPF
   mock(t, prisma.user, "findFirst", async () => account("CORRESPONDENTE"));
   for (const method of ["findMany", "count", "groupBy"]) mock(t, prisma.documentationFolder, method, async ({ where, select }: Args) => { assert.equal(where.tenantId, "tenant-a"); assert.equal(where.correspondentId, "owner-a"); if (select) assert.equal(select.administrativeObservation, undefined); return method === "count" ? 0 : []; });
   assert.ok(await requestContext(token("CORRESPONDENTE"), () => CorrespondentePage()));
+});
+
+for (const status of ["EM_MONTAGEM", "EM_ANALISE", "APROVADO", "REPROVADO"]) test(`shared message edits in ${status} preserve workflow and audit before/after`, async () => {
+  let mutation: Record<string, unknown> = {}; let scope: Record<string, unknown> = {};
+  const fake = fakeDB({ documentationFolder: {
+    findFirst: async ({ where }: Args) => { scope = where; return { version: 2, status, correspondentMessage: "Antes" }; },
+    updateMany: async ({ data, where }: Args) => { mutation = data; assert.equal(where.tenantId, "tenant-a"); assert.equal(where.version, 2); return { count: 1 }; },
+  } });
+  assert.deepEqual(await updateCorrespondentMessage(session, "folder-a", { version: 2, correspondentMessage: " Depois " }, fake.db), { id: "folder-a", version: 3 });
+  assert.equal(scope.tenantId, "tenant-a"); assert.equal(mutation.status, undefined); assert.equal(mutation.people, undefined);
+  assert.equal(mutation.correspondentMessage, "Depois"); assert.equal(fake.events[0].actorId, "owner-a");
+  assert.deepEqual(fake.events[0].metadata, { before: "Antes", after: "Depois" });
+});
+for (const role of ["BROKER", "MANAGER", "CORRESPONDENTE"]) test(`shared message rejects ${role}`, async () => {
+  await assert.rejects(updateCorrespondentMessage({ ...session, user: { ...session.user, role: role as UserRole } }, "folder-a", { version: 2, correspondentMessage: "x" }, fakeDB().db), /Acesso não permitido/);
+});
+test("shared message rejects stale versions, foreign folders and unrelated fields", async () => {
+  await assert.rejects(updateCorrespondentMessage(session, "folder-a", { version: 1, correspondentMessage: "x" }, fakeDB().db));
+  await assert.rejects(updateCorrespondentMessage(session, "foreign", { version: 2, correspondentMessage: "x" }, fakeDB().db));
+  await assert.rejects(updateCorrespondentMessage(session, "folder-a", { version: 2, correspondentMessage: "x", status: "APROVADO" }, fakeDB().db));
+  await assert.rejects(updateCorrespondentMessage(session, "folder-a", { version: 2, correspondentMessage: "x".repeat(3001) }, fakeDB().db));
+});
+test("creation saves shared message separately from private observation", async () => {
+  const fake = fakeDB(); await createFolder(session, { brokerId: "broker-a", holder, correspondentMessage: "Mensagem pública", administrativeObservation: "Nota interna" }, fake.db);
+  assert.equal(fake.folders[0].correspondentMessage, "Mensagem pública"); assert.equal(fake.folders[0].administrativeObservation, "Nota interna");
+  assert.ok(fake.events.some(event => event.eventType === "CORRESPONDENT_MESSAGE_UPDATED"));
+});
+
+test("director can clear message and concurrent write is rejected", async () => {
+  const fake = fakeDB();
+  await updateCorrespondentMessage({ ...session, user: { ...session.user, role: "DIRECTOR" } }, "folder-a", { version: 2, correspondentMessage: "" }, fake.db);
+  assert.equal((fake.events[0].metadata as Record<string, unknown>).after, null);
+  const race = fakeDB({ documentationFolder: { findFirst: async () => ({ version: 2, correspondentMessage: "old" }), updateMany: async () => ({ count: 0 }) } });
+  await assert.rejects(updateCorrespondentMessage(session, "folder-a", { version: 2, correspondentMessage: "new" }, race.db));
+  assert.equal(race.events.length, 0);
+});
+test("message audit failure aborts transaction", async () => {
+  const fake = fakeDB({ documentationEvent: { create: async () => { throw new Error("audit unavailable"); } } });
+  await assert.rejects(updateCorrespondentMessage(session, "folder-a", { version: 2, correspondentMessage: "new" }, fake.db), /audit unavailable/);
 });

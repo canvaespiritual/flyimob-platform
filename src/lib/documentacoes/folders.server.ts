@@ -60,6 +60,7 @@ async function references(tx: DB, tenantId: string, body: Input, previous?: { re
 export async function createFolder(session: DocumentationViewer, value: unknown, db = prisma) {
   if (!canManageDocumentation(session)) throw new DocumentationError(403, "Acesso não permitido.");
   const body = input(value);
+  const message = text(body.correspondentMessage, "Mensagem para o correspondente", false, 3000);
   return db.$transaction(async tx => {
     const { lead, ...refs } = await references(tx, session.tenant.id, body);
     const holder = input(body.holder);
@@ -67,13 +68,33 @@ export async function createFolder(session: DocumentationViewer, value: unknown,
       phone: holder.phone ?? lead?.telefone, email: holder.email ?? lead?.email, relationship: "TITULAR" }, true);
     const folder = await tx.documentationFolder.create({ data: { tenantId: session.tenant.id, ...refs,
       createdById: session.user.id, administrativeObservation: text(body.administrativeObservation, "Observação", false, 3000),
+      correspondentMessage: message,
       status: "EM_MONTAGEM", people: { create: person } }, select: { id: true, version: true } });
     await ensureCatalog(tx, session.tenant.id);
     await event(tx, session, folder.id, "FOLDER_CREATED");
+    if (message) await event(tx, session, folder.id, "CORRESPONDENT_MESSAGE_UPDATED", { before: null, after: message });
     await event(tx, session, folder.id, "BROKER_ASSIGNED", { brokerId: refs.responsiblePersonId ?? refs.brokerId! });
     if (refs.correspondentId) await event(tx, session, folder.id, "CORRESPONDENT_ASSIGNED", { correspondentId: refs.correspondentId });
     return folder;
   });
+}
+/** This shared message can change at every stage, independently of document/workflow edits. */
+export async function updateCorrespondentMessage(session: DocumentationViewer, id: string, value: unknown, db = prisma) {
+  if (!canManageDocumentation(session)) throw new DocumentationError(403, "Acesso não permitido.");
+  const body = input(value);
+  if (Object.keys(body).some(key => !["version", "correspondentMessage"].includes(key)) || !Object.hasOwn(body, "correspondentMessage")) throw new DocumentationError(400, "Informe somente a mensagem e a versão da pasta.");
+  const version = integer(body.version, "Versão");
+  const message = text(body.correspondentMessage, "Mensagem para o correspondente", false, 3000);
+  return db.$transaction(async tx => {
+    const folder = await tx.documentationFolder.findFirst({ where: { id, ...documentationFolderScope(session) }, select: { version: true, correspondentMessage: true } });
+    if (!folder) throw new DocumentationError(404, "Pasta não encontrada.");
+    if (folder.version !== version) throw new DocumentationError(409, "A pasta foi atualizada. Recarregue antes de salvar.");
+    if (folder.correspondentMessage === message) return { id, version };
+    const changed = await tx.documentationFolder.updateMany({ where: { id, tenantId: session.tenant.id, version }, data: { correspondentMessage: message, version: { increment: 1 }, updatedAt: new Date() } });
+    if (changed.count !== 1) throw new DocumentationError(409, "A pasta foi atualizada. Recarregue antes de salvar.");
+    await event(tx, session, id, "CORRESPONDENT_MESSAGE_UPDATED", { before: folder.correspondentMessage, after: message });
+    return { id, version: version + 1 };
+  }, { timeout: 15000 });
 }
 async function claim(tx: DB, session: DocumentationViewer, folderId: string, version: number) {
   const folder = await tx.documentationFolder.findFirst({ where: { id: folderId, ...documentationFolderScope(session) } });
