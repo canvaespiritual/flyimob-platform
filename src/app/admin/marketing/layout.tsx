@@ -11,6 +11,8 @@ export default async function MarketingLayout({ children }: { children: React.Re
     <nav aria-label="Marketing" className="flex flex-wrap gap-2 border-b pb-4">
       <Link className="rounded-lg border px-4 py-2 text-sm hover:bg-slate-50" href="/admin/marketing">Visão geral</Link>
       <Link className="rounded-lg border px-4 py-2 text-sm hover:bg-slate-50" href="/admin/marketing/campanhas">Campanhas</Link>
+      <Link className="rounded-lg border px-4 py-2 text-sm hover:bg-slate-50" href="/admin/marketing/aportes">Aportes</Link>
+      <Link className="rounded-lg border px-4 py-2 text-sm hover:bg-slate-50" href="/admin/marketing/pulmao">Pulmão</Link>
       {canConfigureMarketing(viewer) && <Link className="rounded-lg border px-4 py-2 text-sm hover:bg-slate-50" href="/admin/marketing/configuracoes">Configurações</Link>}
     </nav>{children}
   </div>;

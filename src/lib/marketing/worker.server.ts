@@ -1,3 +1,4 @@
+import { syncAccountBalance } from "./balances.server";
 import { randomUUID } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
@@ -122,6 +123,7 @@ export async function executeSync(run: Claimed, db = prisma) {
       await tx.metaAdAccount.update({ where: { tenantId_id: { tenantId, id: accountId } }, data: { lastSyncedAt: now } });
       await tx.metaConnection.update({ where: { tenantId_id: { tenantId, id: run.connectionId } }, data: { lastSyncedAt: now, safeErrorCode: null } });
     }, { isolationLevel: "Serializable", timeout: 120000 });
+    try { await syncAccountBalance(tenantId, accountId, run.connectionId, `sync:${run.id}`, db, authorization); } catch { /* Physical-balance availability is independent from the successful metric transaction. */ }
     return { accountId, status: "SUCCEEDED" };
   } catch (error) {
     const code = error instanceof MetaError ? error.safeCode : "PROVIDER_UNAVAILABLE";

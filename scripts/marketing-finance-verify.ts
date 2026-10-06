@@ -1,0 +1,102 @@
+import assert from "node:assert/strict";
+import { randomBytes } from "node:crypto";
+import { readFileSync } from "node:fs";
+import { PrismaClient } from "@prisma/client";
+import { createMoneyMovement, transitionMoneyMovement, createReconciliationMark } from "../src/lib/marketing/finance.server";
+import { marketingLung, moneyMovementList } from "../src/lib/marketing/finance-queries.server";
+import { uploadMoneyReceipt, downloadMoneyReceipt } from "../src/lib/marketing/finance-receipts.server";
+import { civilToday, day, type MarketingViewer } from "../src/lib/marketing/policy";
+import type { Prisma } from "@prisma/client";
+import { syncAccountBalance } from "../src/lib/marketing/balances.server";
+import { MetaClient } from "../src/lib/marketing/meta.server";
+import { createHash } from "node:crypto";
+import { loadDocumentationEnv } from "./documentacoes-env.mjs";
+loadDocumentationEnv();
+const db=new PrismaClient({log:[]}),schema=`marketing_finance_verify_${randomBytes(8).toString("hex")}`,rollback=new Error("EXPECTED_ROLLBACK");let checks=0;
+async function liveRollback() {
+ const marker=`marketing_finance_qa_${randomBytes(8).toString("hex")}`;
+ try { await db.$transaction(async tx=> {
+  const adapter=Object.assign(Object.create(tx),{$transaction:async<T>(run:(tx:Prisma.TransactionClient)=>Promise<T>)=>run(tx)}) as typeof db;
+  await tx.tenant.create({data:{id:marker,name:"Synthetic finance QA",slug:marker}});
+  const user=await tx.user.create({data:{tenantId:marker,name:"Synthetic owner",email:`${marker}@example.test`,role:"OWNER"}});
+  const viewer:MarketingViewer={user:{id:user.id,tenantId:marker,role:"OWNER"},tenant:{id:marker,isPlatform:false}};
+  const person=await tx.operationPerson.create({data:{tenantId:marker,name:"Synthetic director without login",operationalRole:"DIRECTOR",independent:true}});
+  const account=await tx.metaAdAccount.create({data:{tenantId:marker,externalId:"9999999999999",name:"Synthetic",currency:"BRL",timezone:"America/Sao_Paulo",sourceAccountStatus:1}});
+  const values={accountId:account.id,personId:person.id,kind:"CONTRIBUTION",origin:"PERSON",status:"CONFIRMED",effectiveDate:"2026-09-01",amount:"200.00",currency:"BRL",idempotencyKey:"first"};
+  const deposit=await createMoneyMovement(viewer,values,adapter);assert.deepEqual(await createMoneyMovement(viewer,values,adapter),deposit);checks++;
+  const pending=await createMoneyMovement(viewer,{...values,status:"PENDING",amount:"50.00",idempotencyKey:"pending"},adapter);
+  await transitionMoneyMovement(viewer,pending.id,{version:0,status:"CONFIRMED",reason:"Credit confirmed synthetically"},adapter);
+  await transitionMoneyMovement(viewer,pending.id,{version:1,status:"CANCELLED",reason:"Duplicate corrected synthetically"},adapter);checks++;
+  await createReconciliationMark(viewer,{accountId:account.id,effectiveDate:"2026-09-01",openingBalance:"0",note:"Known zero",idempotencyKey:"mark"},adapter);checks++;
+  const campaign=await tx.marketingCampaign.create({data:{tenantId:marker,accountId:account.id,externalId:"synthetic",name:"Synthetic",sourceStatus:"ACTIVE",effectiveStatus:"ACTIVE"}});
+  await tx.campaignBrokerAssignment.create({data:{tenantId:marker,campaignId:campaign.id,personId:person.id,validFrom:day("2026-09-01"),createdById:user.id}});
+  const observed=new Date();
+  await tx.marketingDailyMetric.create({data:{tenantId:marker,campaignId:campaign.id,date:day("2026-09-01"),metaSpend:"10",effectiveSpend:"12",costPercentage:"20",leads:2,currency:"BRL",state:"CONFIRMED",sourceObservedAt:observed,syncedAt:observed}});
+  const connection=await tx.metaConnection.create({data:{tenantId:marker,label:"Synthetic no credential",status:"AUTHORIZED"}});
+  const finish=new Date();
+  await tx.marketingSyncRun.create({data:{tenantId:marker,accountId:account.id,connectionId:connection.id,idempotencyKey:"synthetic",periodFrom:day("2026-09-01"),periodTo:day(civilToday()),status:"SUCCEEDED",finishedAt:finish}});
+  const snapshotAt=new Date();
+  await tx.marketingBalanceSnapshot.create({data:{tenantId:marker,accountId:account.id,observationKey:"synthetic",observedAt:snapshotAt,availableBalance:"190",currency:"BRL",state:"AVAILABLE",displayString:"Saldo disponível (R$190,00 BRL)",payload:{synthetic:true}}});
+  await tx.operationPerson.update({where:{id:person.id},data:{active:false}});
+  const report=await marketingLung(viewer,new URLSearchParams("period=custom&from=2026-09-01&to="+civilToday()),adapter);
+  assert.equal(report.table.find(p=>p.id===person.id)?.position,"188.00");assert.equal(report.accounts[0].reconciliation?.status,"CONCILIADO");assert.equal(report.accounts[0].reconciliation?.expected,"190.00");checks++;
+  await assert.rejects(createMoneyMovement(viewer,{...values,idempotencyKey:"inactive"},adapter));checks++;
+  const bytes=Buffer.from("%PDF synthetic receipt"),checksum=createHash("sha256").update(bytes).digest("hex");let stored=false;
+  const storage={ready:async()=>{},put:async()=>{stored=true;},get:async()=>({bytes,checksum})};
+  const receipt=await uploadMoneyReceipt(viewer,deposit.id,new Request("https://flyimob.test",{method:"POST",headers:{"content-type":"application/pdf","x-file-name":"synthetic.pdf","x-file-size":String(bytes.length)},body:bytes}),adapter,storage);
+  assert.equal(stored,true);assert.equal((await downloadMoneyReceipt(viewer,receipt.id,adapter,storage)).bytes.length,bytes.length);checks++;
+  const listing=await moneyMovementList(viewer,new URLSearchParams("period=custom&from=2026-09-01&to="+civilToday()),adapter);assert.equal(listing.total,2);assert.equal(listing.items.find(m=>m.id===deposit.id)?.receipts.length,1);checks++;
+  const unchanged=await tx.operationPerson.findUnique({where:{id:person.id}});assert.equal(unchanged?.operationalRole,"DIRECTOR");checks++;
+  await tx.metaConnectionAccount.create({data:{tenantId:marker,accountId:account.id,connectionId:connection.id,selected:true,accessible:true}});
+  let reads=0;
+  const client=new MetaClient("synthetic","synthetic",(async()=>{reads++;return Response.json({id:"act_9999999999999",currency:"BRL",account_status:1,funding_source_details:{display_string:"Saldo disponível (R$190,00 BRL)",id:"123",type:20}});}) as typeof fetch);
+  await syncAccountBalance(marker,account.id,connection.id,"mocked",adapter,{client,credentialVersion:0});await syncAccountBalance(marker,account.id,connection.id,"mocked",adapter,{client,credentialVersion:0});assert.equal(reads,1);assert.equal(await tx.marketingBalanceSnapshot.count({where:{tenantId:marker,observationKey:"mocked"}}),1);checks++;
+  await tx.$executeRawUnsafe('SET CONSTRAINTS ALL IMMEDIATE');checks++;
+  throw rollback;
+ },{timeout:180000,maxWait:10000});}catch(error){if(error!==rollback)throw error;}
+ assert.equal(await db.tenant.count({where:{id:marker}}),0);checks++;
+ console.log(JSON.stringify({checks,serviceRollback:true,syntheticTenantsRemaining:0,externalCalls:0,realMovementsCreated:0}));
+}
+async function main(){
+ if(process.argv.includes("--service-rollback"))return liveRollback();
+ const before=await db.$queryRawUnsafe(`SELECT count(*)::text AS rows,coalesce(sum("metaSpend"),0)::text AS meta,coalesce(sum("effectiveSpend"),0)::text AS effective FROM public."MarketingDailyMetric"`);
+ try{await db.$transaction(async tx=>{
+  await tx.$executeRawUnsafe(`CREATE SCHEMA "${schema}"`);
+  await tx.$executeRawUnsafe(`SET LOCAL search_path TO "${schema}",public`);
+  for(const table of ["Tenant","User","OperationPerson","MetaAdAccount","MarketingAuditEvent"]){await tx.$executeRawUnsafe(`CREATE TABLE "${schema}"."${table}" (LIKE public."${table}" INCLUDING ALL)`);}
+  const sql=readFileSync("prisma/migrations/20261005160000_marketing_finance/migration.sql","utf8").replace(/^BEGIN;\s*/,"").replace(/COMMIT;\s*$/,"");const blocks=sql.split("$$");let pending="";
+  for(let i=0;i<blocks.length;i++){if(i%2===1){pending+="$$"+blocks[i]+"$$";continue;}const statements=blocks[i].split(";");for(let j=0;j<statements.length;j++){pending+=statements[j];if(j<statements.length-1){if(pending.trim())await tx.$executeRawUnsafe(pending);pending="";}}}if(pending.trim())await tx.$executeRawUnsafe(pending);checks++;
+  await tx.$executeRawUnsafe(`CREATE TRIGGER audit_preserve BEFORE UPDATE OR DELETE ON "MarketingAuditEvent" FOR EACH ROW EXECUTE FUNCTION public.marketing_audit_immutable()`);
+  await tx.$executeRawUnsafe(`INSERT INTO "Tenant" (id,name,slug,"updatedAt") VALUES ('test-a','Synthetic','test-a',now()),('test-b','Synthetic','test-b',now())`);
+  await tx.$executeRawUnsafe(`INSERT INTO "User" (id,"tenantId",name,email,role,"updatedAt") VALUES ('owner','test-a','Synthetic','owner@example.test','OWNER',now()),('director','test-a','Synthetic','director@example.test','DIRECTOR',now()),('foreign','test-b','Synthetic','foreign@example.test','OWNER',now())`);
+  await tx.$executeRawUnsafe(`INSERT INTO "OperationPerson" (id,"tenantId",name,"operationalRole",active,"updatedAt") VALUES ('person','test-a','No login','DIRECTOR',true,now()),('foreign-person','test-b','Foreign','BROKER',true,now())`);
+  await tx.$executeRawUnsafe(`INSERT INTO "MetaAdAccount" (id,"tenantId","externalId",name,currency,timezone,"updatedAt") VALUES ('account','test-a','1','Synthetic','BRL','America/Sao_Paulo',now()),('foreign-account','test-b','2','Foreign','BRL','America/Sao_Paulo',now())`);
+  const audit=async(id:string,eventType:string,entityId:string,metadata:unknown,actor="owner")=>tx.$executeRawUnsafe(`INSERT INTO "MarketingAuditEvent" (id,"tenantId","actorId","eventType","entityId",metadata) VALUES ($1,'test-a',$2,$3,$4,$5::jsonb)`,id,actor,eventType,entityId,JSON.stringify(metadata));
+  let sp=0;const reject=async(sql:string)=>{const point=`save_${++sp}`;await tx.$executeRawUnsafe(`SAVEPOINT ${point}`);await assert.rejects(tx.$executeRawUnsafe(sql));await tx.$executeRawUnsafe(`ROLLBACK TO SAVEPOINT ${point}`);await tx.$executeRawUnsafe(`RELEASE SAVEPOINT ${point}`);checks++;};
+  const insert=(id:string,person="person",account="account",amount="200.00",currency="BRL")=>`INSERT INTO "MarketingMoneyMovement" (id,"tenantId","accountId","personId",kind,origin,status,"effectiveDate",amount,currency,"idempotencyKey","createdById","updatedAt") VALUES ('${id}','test-a','${account}','${person}','CONTRIBUTION','PERSON','CONFIRMED','2026-09-01',${amount},'${currency}','${id}','owner',now())`;
+  await tx.$executeRawUnsafe(insert('movement'));await audit('created','MARKETING_MONEY_CREATED','movement',{after:{amount:"200.00"}});await tx.$executeRawUnsafe('SET CONSTRAINTS ALL IMMEDIATE');checks++;
+  await reject(insert('foreign-person-money','foreign-person'));await reject(insert('foreign-account-money','person','foreign-account'));await reject(insert('currency','person','account','100','USD'));await reject(insert('negative','person','account','-100'));await reject(insert('zero','person','account','0'));
+  await reject(insert('missing-audit'));await reject(`UPDATE "MarketingMoneyMovement" SET amount=100 WHERE id='movement'`);await reject(`DELETE FROM "MarketingMoneyMovement" WHERE id='movement'`);await reject(`UPDATE "MarketingMoneyMovement" SET status='CANCELLED',version=1 WHERE id='movement'`);
+  await audit('director-transition','MARKETING_MONEY_STATUS_CHANGED','movement',{before:{status:"CONFIRMED",version:0},after:{status:"CANCELLED",version:1,reason:"Synthetic"}},'director');await reject(`UPDATE "MarketingMoneyMovement" SET status='CANCELLED',version=1 WHERE id='movement'`);
+  await audit('owner-transition','MARKETING_MONEY_STATUS_CHANGED','movement',{before:{status:"CONFIRMED",version:0},after:{status:"CANCELLED",version:1,reason:"Synthetic cancellation"}});await tx.$executeRawUnsafe(`UPDATE "MarketingMoneyMovement" SET status='CANCELLED',version=1 WHERE id='movement'`);checks++;
+  await reject(`UPDATE "MarketingMoneyMovement" SET status='CONFIRMED',version=2 WHERE id='movement'`);await reject(`DELETE FROM "MarketingAuditEvent" WHERE id='created'`);
+  await tx.$executeRawUnsafe(`UPDATE "OperationPerson" SET active=false,"operationalRole"='MANAGER' WHERE id='person'`);
+  const history=await tx.$queryRawUnsafe<{personId:string;amount:string}[]>(`SELECT "personId",amount::text FROM "MarketingMoneyMovement" WHERE id='movement'`);assert.equal(history[0].personId,'person');assert.equal(history[0].amount,'200.00');checks++;
+  const snapshot=`INSERT INTO "MarketingBalanceSnapshot" (id,"tenantId","accountId","observationKey","observedAt","availableBalance",currency,state,"displayString",payload) VALUES ('snapshot','test-a','account','key',now(),689.39,'BRL','AVAILABLE','Saldo disponível (R$689,39 BRL)','{}')`;
+  await tx.$executeRawUnsafe(snapshot);checks++;await reject(snapshot);await reject(`UPDATE "MarketingBalanceSnapshot" SET "availableBalance"=0 WHERE id='snapshot'`);await reject(`DELETE FROM "MarketingBalanceSnapshot" WHERE id='snapshot'`);
+  await tx.$executeRawUnsafe(`INSERT INTO "MarketingBalanceSnapshot" (id,"tenantId","accountId","observationKey","observedAt",currency,state,payload) VALUES ('unavailable','test-a','account','other',now(),'BRL','UNSUPPORTED','{}')`);checks++;
+  await tx.$executeRawUnsafe('SET CONSTRAINTS ALL DEFERRED');
+  await tx.$executeRawUnsafe(`INSERT INTO "MarketingReconciliationMark" (id,"tenantId","accountId","effectiveAt","effectiveDate","openingBalance",currency,note,"idempotencyKey","createdById") VALUES ('mark','test-a','account','2026-09-01T03:00:00Z','2026-09-01',0,'BRL','Known zero','mark','owner')`);
+  await audit('mark-audit','MARKETING_RECONCILIATION_MARK_CREATED','mark',{after:{openingBalance:"0.00"}});await tx.$executeRawUnsafe('SET CONSTRAINTS ALL IMMEDIATE');checks++;
+  await reject(`UPDATE "MarketingReconciliationMark" SET "openingBalance"=100 WHERE id='mark'`);await reject(`DELETE FROM "MarketingReconciliationMark" WHERE id='mark'`);
+  await tx.$executeRawUnsafe('SET CONSTRAINTS ALL DEFERRED');
+  await tx.$executeRawUnsafe(`INSERT INTO "MarketingMoneyReceipt" (id,"tenantId","movementId","storageKey","originalName","mimeType","fileSize",checksum,"uploadedById") VALUES ('receipt','test-a','movement','private/synthetic','proof.pdf','application/pdf',10,repeat('a',64),'owner')`);
+  await audit('receipt-audit','MARKETING_RECEIPT_ATTACHED','movement',{after:{receiptId:"receipt"}});await tx.$executeRawUnsafe('SET CONSTRAINTS ALL IMMEDIATE');checks++;
+  await reject(`DELETE FROM "MarketingMoneyReceipt" WHERE id='receipt'`);
+  throw rollback;
+ },{timeout:180000,maxWait:10000});}catch(error){if(error!==rollback)throw error;}
+ const remaining=await db.$queryRaw<{count:bigint}[]>`SELECT count(*)::bigint AS count FROM information_schema.schemata WHERE schema_name=${schema}`;assert.equal(remaining[0].count,0n);checks++;
+ const after=await db.$queryRawUnsafe(`SELECT count(*)::text AS rows,coalesce(sum("metaSpend"),0)::text AS meta,coalesce(sum("effectiveSpend"),0)::text AS effective FROM public."MarketingDailyMetric"`);assert.deepEqual(after,before);checks++;
+ console.log(JSON.stringify({checks,isolatedSchemaRolledBack:true,existingMetricsUnchanged:true,externalCalls:0,realMovementsCreated:0}));
+}
+main().catch(error=>{console.error("Marketing finance verification failed",error.code??error.name,String(error.meta?.message??error.message).slice(-1600));process.exitCode=1;}).finally(()=>db.$disconnect());

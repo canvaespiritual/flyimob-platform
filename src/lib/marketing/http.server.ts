@@ -1,3 +1,4 @@
+import { DocumentationError } from "@/lib/documentacoes/validation";
 import { redirect } from "next/navigation";
 import { Prisma } from "@prisma/client";
 import { getSessionUser } from "@/lib/session.server";
@@ -21,6 +22,7 @@ export function json(data: unknown, status = 200) {
 }
 export function failure(error: unknown) {
   if (error instanceof MetaError) return json({ error: error.safeCode === "AUTHORIZATION_REQUIRED" ? "Conexão precisa ser renovada ou a conta perdeu acesso. Reconecte a Meta." : error.safeCode === "RATE_LIMITED" ? "Limite da Meta atingido. Aguarde antes de tentar novamente." : "A Meta não concluiu a leitura. Os dados anteriores foram preservados.", code: error.safeCode }, 502);
+  if (error instanceof DocumentationError) return json({ error: error.message }, error.status);
   if (error instanceof MarketingError) return json({ error: error.message }, error.status);
   if (error instanceof SyntaxError) return json({ error: "JSON inválido." }, 400);
   if (error instanceof Prisma.PrismaClientKnownRequestError) {

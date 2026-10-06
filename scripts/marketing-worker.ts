@@ -3,8 +3,10 @@ import { prisma } from "../src/lib/prisma";
 import { claimSync } from "../src/lib/marketing/sync.server";
 import { executeSync } from "../src/lib/marketing/worker.server";
 loadDocumentationEnv();
+import { scheduledMarketingPass } from "../src/lib/marketing/scheduled.server";
 // One bounded pass, suitable for a Railway scheduled service. No provider payloads or secrets in output.
 async function main() {
+  await scheduledMarketingPass();
   const pending = await prisma.marketingSyncRun.findMany({ where: { OR: [{ status: "PENDING", nextAttemptAt: { lte: new Date() } }, { status: "RUNNING", claimedAt: { lt: new Date(Date.now() - 600000) } }] },
     distinct: ["tenantId", "accountId"], select: { tenantId: true, accountId: true }, take: 100 });
   let succeeded = 0, failed = 0;

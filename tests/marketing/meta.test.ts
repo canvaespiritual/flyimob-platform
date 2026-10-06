@@ -260,3 +260,16 @@ test("callback without matching browser state redirects safely and performs no c
   assert.equal(response.status, 303); assert.equal(response.headers.get("location"), "https://flyimob.com/admin/marketing/configuracoes?meta=error");
   assert.equal(response.headers.get("referrer-policy"), "no-referrer"); assert.ok(response.headers.get("set-cookie")?.includes("Max-Age=0"));
 });
+
+test("successful campaign sync also records physical balance and repeated observation does not duplicate it", async context => {
+ const fixture=syncFixture();let saved:Record<string,unknown>|undefined;
+ const snapshot={findUnique:async()=>saved?{state:"AVAILABLE"}:null,upsert:async({create}:{create:Record<string,unknown>})=>{saved=create;}};
+ Object.assign(fixture.database,{marketingBalanceSnapshot:snapshot});
+ Object.assign(fixture.database.metaConnectionAccount,{findFirst:async()=>({id:"link"})});
+ const original=fixture.database.$transaction;
+ Object.assign(fixture.database,{$transaction:async(callback:(tx:unknown)=>unknown)=>original(async tx=>{Object.assign(tx,{marketingBalanceSnapshot:snapshot});return callback(tx);})});
+ const payloads:unknown[]=[...syncPayload(),{id:"act_1",currency:"BRL",funding_source_details:{display_string:"Saldo disponível (R$689,39 BRL)",id:"123",type:20}}];
+ context.mock.method(globalThis,"fetch",transport(payloads));
+ assert.equal((await executeSync(fixture.run,fixture.database)).status,"SUCCEEDED");assert.equal(String(saved?.availableBalance),"689.39");assert.equal(saved?.observationKey,"sync:run");
+ context.mock.method(globalThis,"fetch",transport(syncPayload()));await executeSync(fixture.run,fixture.database);assert.equal(fixture.records.size,1);assert.equal(String(fixture.records.get("2026-10-05")?.metaSpend),"31");
+});

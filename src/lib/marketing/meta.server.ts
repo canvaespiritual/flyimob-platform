@@ -77,7 +77,7 @@ export function insight(value: unknown) {
 export class MetaClient {
   constructor(private token: string, private secret: string, private transport: typeof fetch = fetch) {}
   async get(path: string, params: Record<string, string> = {}): Promise<Obj> {
-    if (!/^(me(?:\/adaccounts|\/permissions)?|act_\d+\/(campaigns|ads|insights)|\d+\/insights)$/.test(path)) throw new MetaError("INVALID_RESPONSE");
+    if (!/^(me(?:\/adaccounts|\/permissions)?|act_\d+(?:\/(campaigns|ads|insights))?|\d+\/insights)$/.test(path)) throw new MetaError("INVALID_RESPONSE");
     const url = new URL(`https://graph.facebook.com/${GRAPH_VERSION}/${path}`);
     for (const [key, value] of Object.entries(params)) url.searchParams.set(key, value);
     url.searchParams.set("appsecret_proof", createHmac("sha256", this.secret).update(this.token).digest("hex"));

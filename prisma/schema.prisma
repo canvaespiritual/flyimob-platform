@@ -41,6 +41,7 @@ model OperationPerson {
   user User?
   financialParticipant FinancialParticipant?
   documentationFolders DocumentationFolder[]
+  marketingMoneyMovements MarketingMoneyMovement[]
   assignments CampaignBrokerAssignment[]
   @@unique([tenantId, id])
   @@index([tenantId, active])
@@ -104,6 +105,9 @@ model MetaAdAccount {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  moneyMovements MarketingMoneyMovement[]
+  balanceSnapshots MarketingBalanceSnapshot[]
+  reconciliationMarks MarketingReconciliationMark[]
   connections MetaConnectionAccount[]
   campaigns MarketingCampaign[]
   syncRuns MarketingSyncRun[]
@@ -598,6 +602,10 @@ model Tenant {
   financialDocuments    FinancialDocument[]
   documentationFolders DocumentationFolder[]
   documentationDocumentTypes DocumentationDocumentType[]
+  marketingMoneyMovements MarketingMoneyMovement[]
+  marketingBalanceSnapshots MarketingBalanceSnapshot[]
+  marketingReconciliationMarks MarketingReconciliationMark[]
+  marketingReceipts MarketingMoneyReceipt[]
   metaConnections MetaConnection[]
   marketingOAuthStates MarketingOAuthState[]
   metaAdAccounts MetaAdAccount[]
@@ -650,6 +658,9 @@ model User {
   documentationResolvedPendingItems DocumentationPendingItem[] @relation("DocumentationPendingResolver")
   documentationComments DocumentationComment[]
   documentationEvents DocumentationEvent[]
+  marketingMoneyMovementsCreated MarketingMoneyMovement[] @relation("MarketingMoneyCreator")
+  marketingReconciliationMarksCreated MarketingReconciliationMark[]
+  marketingReceiptsUploaded MarketingMoneyReceipt[]
   marketingAssignments CampaignBrokerAssignment[] @relation("MarketingBroker")
   marketingOAuthStates MarketingOAuthState[]
   marketingAssignmentsCreated CampaignBrokerAssignment[] @relation("MarketingAssignmentCreator")
@@ -2599,4 +2610,92 @@ model DocumentationEvent {
   @@index([tenantId, folderId, roundId])
   @@index([tenantId, actorId])
   @@index([tenantId, eventType, createdAt])
+}
+
+// Internal economics are independent from the fungible physical Meta balance.
+model MarketingMoneyMovement {
+  id String @id @default(cuid())
+  tenantId String
+  accountId String
+  personId String?
+  kind String @db.VarChar(20)
+  origin String @db.VarChar(20)
+  adjustmentType String? @db.VarChar(30)
+  affectsPhysicalBalance Boolean @default(true)
+  status String @default("PENDING") @db.VarChar(20)
+  effectiveDate DateTime @db.Date
+  amount Decimal @db.Decimal(18, 2)
+  currency String @db.Char(3)
+  note String? @db.VarChar(1000)
+  reason String? @db.VarChar(1000)
+  idempotencyKey String @db.VarChar(80)
+  createdById String
+  version Int @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  account MetaAdAccount @relation(fields: [tenantId, accountId], references: [tenantId, id], onDelete: Restrict)
+  person OperationPerson? @relation(fields: [tenantId, personId], references: [tenantId, id], onDelete: Restrict)
+  createdBy User @relation("MarketingMoneyCreator", fields: [tenantId, createdById], references: [tenantId, id], onDelete: Restrict)
+  receipts MarketingMoneyReceipt[]
+  @@unique([tenantId, id])
+  @@unique([tenantId, idempotencyKey])
+  @@index([tenantId, accountId, effectiveDate])
+  @@index([tenantId, personId, effectiveDate])
+}
+model MarketingMoneyReceipt {
+  id String @id
+  tenantId String
+  movementId String
+  storageKey String @unique
+  originalName String @db.VarChar(200)
+  mimeType String @db.VarChar(100)
+  fileSize BigInt
+  checksum String @db.Char(64)
+  uploadedById String
+  createdAt DateTime @default(now())
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  movement MarketingMoneyMovement @relation(fields: [tenantId, movementId], references: [tenantId, id], onDelete: Restrict)
+  uploadedBy User @relation(fields: [tenantId, uploadedById], references: [tenantId, id], onDelete: Restrict)
+  @@index([tenantId, movementId])
+}
+model MarketingBalanceSnapshot {
+  id String @id @default(cuid())
+  tenantId String
+  accountId String
+  observationKey String @db.VarChar(160)
+  observedAt DateTime
+  availableBalance Decimal? @db.Decimal(18, 2)
+  currency String @db.Char(3)
+  state String @db.VarChar(30)
+  fundingSourceId String? @db.VarChar(120)
+  fundingSourceType Int?
+  displayString String? @db.VarChar(1000)
+  safeErrorCode String? @db.VarChar(80)
+  payload Json
+  createdAt DateTime @default(now())
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  account MetaAdAccount @relation(fields: [tenantId, accountId], references: [tenantId, id], onDelete: Restrict)
+  @@unique([tenantId, accountId, observationKey])
+  @@index([tenantId, accountId, observedAt])
+}
+model MarketingReconciliationMark {
+  id String @id @default(cuid())
+  tenantId String
+  accountId String
+  effectiveAt DateTime
+  // Date of the local account-day boundary; intraday marks are not claimed exact.
+  effectiveDate DateTime @db.Date
+  openingBalance Decimal @db.Decimal(18, 2)
+  currency String @db.Char(3)
+  tolerance Decimal @default(0.02) @db.Decimal(18, 2)
+  note String @db.VarChar(1000)
+  idempotencyKey String @db.VarChar(80)
+  createdById String
+  createdAt DateTime @default(now())
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  account MetaAdAccount @relation(fields: [tenantId, accountId], references: [tenantId, id], onDelete: Restrict)
+  createdBy User @relation(fields: [tenantId, createdById], references: [tenantId, id], onDelete: Restrict)
+  @@unique([tenantId, idempotencyKey])
+  @@index([tenantId, accountId, effectiveAt])
 }
