@@ -1,0 +1,7 @@
+export const fundingNatures={STANDARD:"Aporte sem obrigação de devolução",RECOVERABLE:"Financiamento de mídia recuperável",BONUS:"Bonificação antecipada",GLOBAL:"Aporte global / reserva não alocada",RECOMPOSE_CASH:"Recomposição física / conciliação pendente",ALLOCATION:"Distribuição de crédito",ALLOCATION_LOAN:"Distribuição: financiamento recuperável",ALLOCATION_BONUS:"Distribuição: bonificação antecipada",RECOMPOSE_LOAN:"Recomposição: assunção recuperável",RECOMPOSE_BONUS:"Recomposição: cobertura por bonificação",SETTLEMENT_META:"Compensação com crédito na Meta",SETTLEMENT_EXTERNAL:"Recuperação recebida fora da Meta",SETTLEMENT_BONUS:"Baixa por bonificação posterior",SETTLEMENT_LOSS:"Baixa por perda reconhecida"} as const;
+export const isFundingSettlement=(nature:string)=>nature.startsWith('SETTLEMENT_')&&Object.hasOwn(fundingNatures,nature);
+export const isRecoverableFunding=(nature:string)=>['RECOVERABLE','ALLOCATION_LOAN','RECOMPOSE_LOAN'].includes(nature);
+export const isFundingAllocation=(nature:string)=>['ALLOCATION','ALLOCATION_LOAN','ALLOCATION_BONUS','RECOMPOSE_LOAN','RECOMPOSE_BONUS'].includes(nature);
+export const isRecomposition=(nature:string)=>nature==='RECOMPOSE_LOAN'||nature==='RECOMPOSE_BONUS';
+export const recoveryMethods={PAYMENT:'Pagamento recebido',COMMISSION:'Desconto em comissão já realizado',OTHER:'Outro acerto recebido'} as const;
+export const globalFundingNatures=['GLOBAL','RECOMPOSE_CASH'] as const;

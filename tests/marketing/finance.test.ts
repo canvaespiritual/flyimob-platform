@@ -14,6 +14,11 @@ import { downloadMoneyReceipt, uploadMoneyReceipt } from "../../src/lib/marketin
 import { POST } from "../../src/app/api/marketing/finance/movements/route";
 import { createSessionToken } from "../../src/lib/auth.server";
 import { readFileSync } from "node:fs";
+import { applyCostCorrections } from "../../src/lib/marketing/cost-corrections.server";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { FinancePositionTable } from "../../src/app/admin/marketing/finance-position-table";
+import { GET as lungGET } from "../../src/app/api/marketing/finance/lung/route";
 const D=(value:string)=>new Prisma.Decimal(value);
 const viewer:MarketingViewer={user:{id:"owner",tenantId:"tenant",role:"OWNER"},tenant:{id:"tenant",isPlatform:false}};
 const date=day("2026-09-01");
@@ -56,7 +61,7 @@ test("balance snapshots are idempotent and inactive Meta account read is GET onl
 test("snapshot timeout remains unavailable without throwing away history",async()=>{let state="";const f=fake({marketingBalanceSnapshot:{findUnique:async()=>null,upsert:async({create}:{create:{state:string}})=>{state=create.state;}},metaAdAccount:{findFirst:async()=>({externalId:"1",currency:"BRL"})},metaConnectionAccount:{findFirst:async()=>({id:"link"})}});const client=new MetaClient("synthetic","secret",(async()=>{throw new Error("network");}) as typeof fetch);assert.equal((await syncAccountBalance("tenant","account","connection","attempt",f.db,{client,credentialVersion:1})).state,"UNAVAILABLE");assert.equal(state,"UNAVAILABLE");});
 test("receipt download and upload check tenant/access before storage",async()=>{let calls=0;const storage={ready:async()=>{},put:async()=>{calls++;},get:async()=>{calls++;return {bytes:new Uint8Array()};}};const f=fake({marketingMoneyReceipt:{findFirst:async()=>null}});await assert.rejects(downloadMoneyReceipt(viewer,"foreign",f.db,storage));await assert.rejects(uploadMoneyReceipt({...viewer,user:{...viewer.user,role:"DIRECTOR"}},"movement",new Request("https://flyimob.test"),f.db,storage));assert.equal(calls,0);});
 test("finance read projections are tenant scoped and receipt keys are not projected",async()=>{const f=fake({marketingMoneyMovement:{findMany:async({where,select}:{where:{tenantId:string};select:Record<string,unknown>})=>{assert.equal(where.tenantId,"tenant");assert.equal(select.idempotencyKey,undefined);return [];},count:async()=>0}});assert.equal((await moneyMovementList(viewer,new URLSearchParams("tenantId=foreign"),f.db)).total,0);});
-test("shared eligibility used for new financial people options",async()=>{const f=fake({metaAdAccount:{findMany:async()=>[]},operationPerson:{findMany:async()=>[{id:"p",name:"No login",operationalRole:"MANAGER",active:true,mergedIntoId:null},{id:"inactive",name:"Historical",operationalRole:"BROKER",active:false,mergedIntoId:null}]}});const o=await marketingFinanceOptions(viewer,f.db);assert.equal(o.people[0].eligible,true);assert.equal(o.people[1].eligible,false);});
+test("shared eligibility used for new financial people options",async()=>{const f=fake({marketingCampaign:{findMany:async()=>[]},metaAdAccount:{findMany:async()=>[]},operationPerson:{findMany:async()=>[{id:"p",name:"No login",operationalRole:"MANAGER",active:true,mergedIntoId:null},{id:"inactive",name:"Historical",operationalRole:"BROKER",active:false,mergedIntoId:null}]}});const o=await marketingFinanceOptions(viewer,f.db);assert.equal(o.people[0].eligible,true);assert.equal(o.people[1].eligible,false);});
 test("money endpoint rejects anonymous caller before parsing body",async()=>{assert.equal((await requestContext(undefined,()=>POST(new Request("https://flyimob.test/api/marketing/finance/movements",{method:"POST",body:"not-json"})))).status,401);});
 test("money endpoint denies DIRECTOR and rejects cross-site OWNER request",async t=>{process.env.SESSION_SECRET="synthetic-finance-secret";const delegate=prisma.user as unknown as {findFirst:unknown};const old=delegate.findFirst;let role="DIRECTOR";delegate.findFirst=async()=>({id:"owner",tenantId:"tenant",role,isActive:true,sessionVersion:0,name:"Synthetic",email:"synthetic@example.test",tenant:{id:"tenant",isPlatform:false,name:"Synthetic",slug:"synthetic",parentId:null}});t.after(()=>{delegate.findFirst=old;});const token=(role:"OWNER"|"DIRECTOR")=>createSessionToken({uid:"owner",tid:"tenant",role,sv:0});assert.equal((await requestContext(token("DIRECTOR"),()=>POST(new Request("https://flyimob.test/api/marketing/finance/movements",{method:"POST",body:"{}"})))).status,403);role="OWNER";assert.equal((await requestContext(token("OWNER"),()=>POST(new Request("https://flyimob.test/api/marketing/finance/movements",{method:"POST",headers:{origin:"https://foreign.test","sec-fetch-site":"cross-site"},body:"{}"})))).status,403);});
 test("incremental migration does not alter prior metrics, rules or generic Financeiro",()=>{const sql=readFileSync("prisma/migrations/20261005160000_marketing_finance/migration.sql","utf8");assert.doesNotMatch(sql,/DROP TABLE|UPDATE "MarketingDailyMetric"|ALTER TABLE "Financial|UPDATE "CampaignBrokerAssignment"/);assert.match(sql,/DEFERRABLE INITIALLY DEFERRED/);assert.match(sql,/marketing_money_preserve/);});
@@ -72,12 +77,83 @@ function lungFixture(intraday=false) {
   marketingReconciliationMark:{findMany:async()=>[{accountId:"account",effectiveDate:date,effectiveAt:new Date(intraday?"2026-09-01T12:00:00Z":"2026-09-01T03:00:00Z"),openingBalance:D("0"),tolerance:D("0.02"),note:"Known zero"}]},
   marketingBalanceSnapshot:{findFirst:async()=>({accountId:"account",observedAt,currency:"BRL",state:"AVAILABLE",availableBalance:D("190"),safeErrorCode:null,displayString:"Saldo disponível (R$190,00 BRL)"})},
   marketingAuditEvent:{findMany:async()=>[]},
+  marketingCostRule:{findMany:async()=>[]},
   marketingSyncRun:{findMany:async()=>[{periodFrom:date,periodTo:day("2026-10-05"),finishedAt:observedAt}]},
  });
 }
 test("Pulmão keeps cumulative historical person position separate from physical reconciliation",async()=>{const report=await marketingLung(viewer,new URLSearchParams("period=custom&from=2026-09-01&to=2026-09-01"),lungFixture().db,new Date("2026-10-05T13:00:00Z"));assert.equal(report.table[0].position,"188.00");assert.equal(report.table[0].active,false);assert.equal(report.accounts[0].reconciliation?.status,"CONCILIADO");assert.equal(report.accounts[0].reconciliation?.expected,"190.00");assert.equal(report.totals[0].availableBalance,"190.00");});
 test("intraday zero marker is preserved but cannot claim exact daily reconciliation",async()=>{const report=await marketingLung(viewer,new URLSearchParams(),lungFixture(true).db,new Date("2026-10-05T13:00:00Z"));assert.equal(report.accounts[0].reconciliation?.expected,null);assert.match(report.accounts[0].reconciliation!.status,/INTRADIÁRIO/);});
 test("snapshot staleness and missing sync coverage suppress autonomy and exact reconciliation",async()=>{const f=lungFixture();const delegate=f.db.marketingSyncRun as unknown as {findMany:unknown};delegate.findMany=async()=>[];const report=await marketingLung(viewer,new URLSearchParams(),f.db,new Date("2026-10-05T13:00:00Z"));assert.equal(report.accounts[0].autonomyDays,null);assert.equal(report.accounts[0].dailyMetaSpend,null);assert.match(report.accounts[0].reconciliation!.status,/NECESSÁRIA/);});
+
+function aprilFixture() {
+ const f=lungFixture();
+ const raw=[['2026-04-07','8.19'],['2026-04-08','11.89'],['2026-04-09','8.91'],['2026-04-10','2.71'],['2026-04-12','0']].map(([date,value])=>({...metric(value),date:day(date),metaSpend:D(value),sourceObservedAt:day('2026-10-05'),campaign:{id:'campaign',name:'Historical campaign',purpose:'CLIENTES',accountId:'account',assignments:[{personId:'person',brokerId:null,validFrom:day('2026-01-01'),validTo:null,person:{name:'Historical director'},broker:null}]}}));
+ Object.assign(f.db.marketingDailyMetric,{count:async()=>raw.length,findMany:async({where}:{where:{tenantId:string;date:{lte:Date};campaign:{tenantId:string;accountId:{in:string[]}}}})=>{
+  assert.equal(where.tenantId,'tenant');assert.equal(where.campaign.tenantId,'tenant');
+  return raw.filter(r=>r.date<=where.date.lte && where.campaign.accountId.in.includes(r.campaign.accountId));
+ }});
+ Object.assign(f.db.marketingMoneyMovement,{count:async()=>0,findMany:async()=>[]});
+ Object.assign(f.db.marketingCostRule,{findMany:async()=>[{id:'rule',percentage:D('12.15'),validFrom:day('2026-04-05'),validTo:null}]});
+ Object.assign(f.db.marketingAuditEvent,{findMany:async()=>[{metadata:{after:{affectedFrom:'2026-04-05',affectedTo:'2026-10-05'}}}]});
+ Object.assign(f.db.metaAdAccount,{findMany:async({where}:{where:{tenantId:string;id?:string}})=>{assert.equal(where.tenantId,'tenant');return !where.id||where.id==='account'?[{id:'account',name:'Synthetic',currency:'BRL',timezone:'America/Noronha',status:'ACTIVE',sourceAccountStatus:1,lastSyncedAt:day('2026-10-05')}]:[];}});
+ return f;
+}
+for(const [from,to,expected,accumulated] of [
+ ['2026-04-01','2026-04-20','35.55','35.55'],
+ ['2026-04-20','2026-05-05','0.00','35.55'],
+ ['2026-05-11','2026-05-11','0.00','35.55'],
+ ['2026-04-07','2026-04-07','9.19','9.19'],
+ ['2026-04-08','2026-04-08','13.33','22.52'],
+ ['2026-04-09','2026-04-10','13.03','35.55'],
+ ['2026-04-01','2026-04-06','0.00','0.00'],
+])test(`Pulmão custom ${from}..${to} separates period and cumulative corrected consumption`,async()=>{
+ const report=await marketingLung(viewer,new URLSearchParams({period:'custom',from,to}),aprilFixture().db,new Date('2026-10-08T02:30:00Z'));
+ assert.equal(report.from,from);assert.equal(report.to,to);
+ const row=report.table.find(r=>r.id==='person');
+ // Inactive historical people with no records before the cutoff need not have a zero row.
+ if(!row){assert.equal(accumulated,'0.00');return;}
+ assert.equal(row.periodConsumption,expected);assert.equal(row.consumption,accumulated);assert.equal(row.position,D(accumulated).negated().toFixed(2));
+});
+test('period boundaries are inclusive, future metrics excluded and currencies/responsible identities stay separate',()=>{
+ const rows=[{...metric('7'),date:day('2026-04-20')},{...metric('3'),date:day('2026-05-05')},{...metric('900'),date:day('2026-05-06')},{...metric('4'),date:day('2026-05-05'),currency:'USD'},{...metric('2'),date:day('2026-05-05'),campaign:{id:'other',assignments:[{personId:'other',validFrom:day('2026-04-01'),validTo:null}]}}].map(r=>({...r,campaign:{...r.campaign,assignments:r.campaign.assignments.map(a=>({...a,validFrom:day('2026-04-01')}))}}));
+ const ledger=economicLedger([],rows,day('2026-04-20'),day('2026-05-05'));
+ assert.equal(ledger.find(r=>r.id==='person'&&r.currency==='BRL')?.periodConsumption,'10.00');assert.equal(ledger.find(r=>r.currency==='USD')?.consumption,'4.00');assert.equal(ledger.find(r=>r.id==='other')?.consumption,'2.00');
+});
+test('historical contributions and adjustments affect accumulated position without becoming period consumption',()=>{
+ const contribution={...m('100'),effectiveDate:day('2026-04-01')};
+ const adjustment={...contribution,kind:'ADJUSTMENT',amount:D('-5')};
+ const future={...contribution,amount:D('999'),effectiveDate:day('2026-05-12')};
+ const row=economicLedger([contribution,adjustment,future],[{...metric('35.55'),date:day('2026-04-10'),campaign:{id:'c',assignments:[{personId:'person',validFrom:day('2026-04-01'),validTo:null}]}}],day('2026-05-11'),day('2026-05-11'))[0];
+ assert.equal(row.periodContributions,'0.00');assert.equal(row.periodConsumption,'0.00');assert.equal(row.contributions,'100.00');assert.equal(row.adjustments,'-5.00');assert.equal(row.position,'59.45');
+});
+test('Pulmão account and person filters preserve scope and do not leak other accounts',async()=>{
+ const params=new URLSearchParams('period=custom&from=2026-04-01&to=2026-04-20&accountId=foreign');
+ assert.deepEqual((await marketingLung(viewer,params,aprilFixture().db)).table,[]);
+ params.set('accountId','account');params.set('personId','foreign');assert.deepEqual((await marketingLung(viewer,params,aprilFixture().db)).table,[]);
+});
+test('corrected spend is rounded per day and does not overwrite imported snapshots',()=>{
+ const rows=[['2026-04-07','8.19'],['2026-04-08','11.89'],['2026-04-09','8.91'],['2026-04-10','2.71']].map(([date,value])=>({...metric(value),date:day(date),metaSpend:D(value),campaign:{...metric().campaign,name:'c',purpose:'CLIENTES',assignments:[{brokerId:'person',personId:'person',validFrom:day('2026-01-01'),validTo:null,broker:{name:'Person'}}]}}));
+ const corrected=applyCostCorrections(rows,[{id:'r',percentage:D('12.15'),validFrom:day('2026-04-05'),validTo:null}],[{metadata:{after:{affectedFrom:'2026-04-05',affectedTo:'2026-10-05'}}}]);
+ assert.deepEqual(corrected.map(r=>r.effectiveSpend!.toFixed(2)),['9.19','13.33','9.99','3.04']);assert.equal(rows[0].effectiveSpend.toFixed(2),'8.19');
+});
+test('rendered position table gives period and accumulated consumption distinct columns and civil date captions',async()=>{
+ const report=await marketingLung(viewer,new URLSearchParams('period=custom&from=2026-05-11&to=2026-05-11'),aprilFixture().db);
+ const html=renderToStaticMarkup(createElement(FinancePositionTable,{report})).replaceAll('\u00a0',' ');
+ assert.match(html,/Período aplicado: 11\/05\/2026 a 11\/05\/2026/);assert.match(html,/>Consumo no período<\/th>/);assert.match(html,/>Consumo acumulado até 11\/05\/2026<\/th>/);assert.match(html,/<td>R\$ 0,00<\/td><td>R\$ 35,55<\/td>/);assert.match(html,/-R\$ 35,55/);
+});
+test('authenticated Pulmão endpoint forwards URL dates and prevents response caching across distinct and repeated periods',async t=>{
+ process.env.SESSION_SECRET='synthetic-lung-secret';
+ const users=prisma.user as unknown as {findFirst:unknown};const oldUser=users.findFirst,oldTransaction=prisma.$transaction;
+ users.findFirst=async()=>({id:'owner',tenantId:'tenant',role:'OWNER',isActive:true,sessionVersion:0,name:'Synthetic',tenant:{id:'tenant',isPlatform:false}});
+ prisma.$transaction=aprilFixture().db.$transaction;
+ t.after(()=>{users.findFirst=oldUser;prisma.$transaction=oldTransaction;});
+ const token=createSessionToken({uid:'owner',tid:'tenant',role:'OWNER',sv:0});
+ for(const [from,to,expected] of [['2026-04-01','2026-04-20','35.55'],['2026-04-20','2026-05-05','0.00'],['2026-05-11','2026-05-11','0.00'],['2026-05-11','2026-05-11','0.00']]){
+  const response=await requestContext(token,()=>lungGET(new Request(`https://flyimob.test/api/marketing/finance/lung?period=custom&from=${from}&to=${to}`)));
+  assert.equal(response.status,200);assert.equal(response.headers.get('Cache-Control'),'private, no-store');
+  const result=await response.json();assert.equal(result.from,from);assert.equal(result.to,to);assert.equal(result.table[0].periodConsumption,expected);assert.equal(result.table[0].consumption,'35.55');
+ }
+});
 
 test("scheduled pass creates one daily queue key and repeated hourly pass does not duplicate it",async()=>{
  let queued:Record<string,unknown>|null=null,created=0;

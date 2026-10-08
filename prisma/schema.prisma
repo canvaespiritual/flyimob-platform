@@ -41,7 +41,8 @@ model OperationPerson {
   user User?
   financialParticipant FinancialParticipant?
   documentationFolders DocumentationFolder[]
-  marketingMoneyMovements MarketingMoneyMovement[]
+  marketingMoneyMovements MarketingMoneyMovement[] @relation("MarketingMoneyFunder")
+  marketingBenefitedMovements MarketingMoneyMovement[] @relation("MarketingMoneyBeneficiary")
   assignments CampaignBrokerAssignment[]
   @@unique([tenantId, id])
   @@index([tenantId, active])
@@ -2618,6 +2619,12 @@ model MarketingMoneyMovement {
   tenantId String
   accountId String
   personId String?
+  beneficiaryPersonId String?
+  fundingNature String @default("STANDARD") @db.VarChar(30)
+  fundingMovementId String?
+  distributionMovementId String?
+  externalReference String? @db.VarChar(200)
+  recoveryMethod String? @db.VarChar(30)
   kind String @db.VarChar(20)
   origin String @db.VarChar(20)
   adjustmentType String? @db.VarChar(30)
@@ -2635,13 +2642,21 @@ model MarketingMoneyMovement {
   updatedAt DateTime @updatedAt
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   account MetaAdAccount @relation(fields: [tenantId, accountId], references: [tenantId, id], onDelete: Restrict)
-  person OperationPerson? @relation(fields: [tenantId, personId], references: [tenantId, id], onDelete: Restrict)
+  person OperationPerson? @relation("MarketingMoneyFunder", fields: [tenantId, personId], references: [tenantId, id], onDelete: Restrict)
+  beneficiary OperationPerson? @relation("MarketingMoneyBeneficiary", fields: [tenantId, beneficiaryPersonId], references: [tenantId, id], onDelete: Restrict, map: "marketing_movement_beneficiary_fkey")
+  fundingMovement MarketingMoneyMovement? @relation("MarketingFundingSettlement", fields: [tenantId, fundingMovementId], references: [tenantId, id], onDelete: Restrict)
+  settlements MarketingMoneyMovement[] @relation("MarketingFundingSettlement")
+  distributionMovement MarketingMoneyMovement? @relation("MarketingFundingDistribution", fields: [tenantId, distributionMovementId], references: [tenantId, id], onDelete: Restrict)
+  distributions MarketingMoneyMovement[] @relation("MarketingFundingDistribution")
   createdBy User @relation("MarketingMoneyCreator", fields: [tenantId, createdById], references: [tenantId, id], onDelete: Restrict)
   receipts MarketingMoneyReceipt[]
   @@unique([tenantId, id])
   @@unique([tenantId, idempotencyKey])
   @@index([tenantId, accountId, effectiveDate])
   @@index([tenantId, personId, effectiveDate])
+  @@index([tenantId, beneficiaryPersonId, effectiveDate], map: "marketing_movement_beneficiary_date_idx")
+  @@index([tenantId, fundingMovementId])
+  @@index([tenantId, distributionMovementId])
 }
 model MarketingMoneyReceipt {
   id String @id
