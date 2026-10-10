@@ -6,6 +6,10 @@ export async function trainingFetch(path: string, method = "GET", body?: unknown
   const r = await fetch(path, { method, cache: "no-store", headers: { "Content-Type": "application/json" }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
   if (!r.ok) {
     if (r.status === 401) throw new Error("Sua sessão expirou. Entre novamente na Flyimob.");
+    if (r.status === 409) {
+      const data = await r.json().catch(() => null);
+      if (data?.error === "broker_login_required") throw new Error("O login deste corretor ainda não está pronto. Revise o acesso em Usuários / Equipe e atualize a lista antes de conceder o curso.");
+    }
     if ([403, 404].includes(r.status)) throw new Error("Acesso revogado ou aula indisponível. Consulte seu administrador.");
     throw new Error("Não foi possível conectar aos treinamentos. Verifique sua conexão e tente novamente.");
   }

@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { exchange, learnerRequest, configuredCourseIds } from "./horizonte.server";
 import { TrainingError, validateCourseIds, type Course } from "./contract";
+import { brokerLoginStatus } from "./access-policy";
 
 type User = { id: string; tenantId: string; name: string };
 // All app instances serialize changes and upstream operations for the same identity.
@@ -37,8 +38,9 @@ export async function setAccess(admin: User, brokerId: string, raw: unknown) {
   const ids = validateCourseIds(raw, configuredCourseIds());
   return prisma.$transaction(async tx => {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${"training:" + brokerId}))`;
-    const broker = await tx.user.findFirst({ where: { id: brokerId, tenantId: admin.tenantId, role: "BROKER", isActive: true } });
+    const broker = await tx.user.findFirst({ where: { id: brokerId, tenantId: admin.tenantId, role: "BROKER", isActive: true }, select: { id: true, tenantId: true, name: true, role: true, isActive: true, passwordHash: true, person: { select: { active: true, mergedIntoId: true } } } });
     if (!broker) throw new TrainingError(404, "broker_not_found");
+    if (ids.length && brokerLoginStatus({ role: broker.role, isActive: broker.isActive, passwordConfigured: !!broker.passwordHash }, broker.person) !== "eligible") throw new TrainingError(409, "broker_login_required");
     const data = { tenantId: admin.tenantId, courseIds: ids, updatedBy: admin.id, syncPending: true };
     await tx.trainingAccess.upsert({ where: { userId: brokerId }, create: { ...data, userId: brokerId }, update: data });
     try {
