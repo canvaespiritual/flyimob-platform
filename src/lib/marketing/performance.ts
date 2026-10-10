@@ -1,3 +1,4 @@
+import { selectionIds } from "./filter-selection";
 import { Prisma } from '@prisma/client';
 import { day, MarketingError } from './policy';
 import type { ReportRow } from './metrics.server';
@@ -24,8 +25,7 @@ export function change(current: string | number | null, previous: string | numbe
  return {absolute:c.minus(p).toFixed(2),percent:p.isZero()?null:c.minus(p).div(p.abs()).times(100).toFixed(2)};
 }
 export function salesScope(params: URLSearchParams, enforcedPersonId?: string) {
- const ids=[...new Set(params.getAll('personId').filter(Boolean))];
- if(ids.length>100)throw new MarketingError(400,'Selecione até 100 responsáveis.');
+ const ids=selectionIds(params,'personId');
  if(enforcedPersonId && ids.some(id=>id!==enforcedPersonId))throw new MarketingError(403,'Responsável fora do escopo autorizado.');
  return enforcedPersonId?[enforcedPersonId]:ids;
 }

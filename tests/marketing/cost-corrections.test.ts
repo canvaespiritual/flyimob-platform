@@ -108,7 +108,7 @@ test("later ingestion retains original snapshots and reports still reflect the c
 });
 test("historical overview scopes corrections and metrics to operation and period in one consistent read", async () => {
   const source = row();
-  const tx = { marketingDailyMetric: { count: async () => 1, findMany: async ({ where }: { where: Row }) => { assert.equal(where.tenantId, "a"); return [source]; } },
+  const tx = { operationPerson:{findMany:async()=>[{id:"person"}]},marketingDailyMetric: { count: async () => 1, findMany: async ({ where }: { where: Row }) => { assert.equal(where.tenantId, "a"); return [source]; } },
     marketingAuditEvent: { findMany: async ({ where }: { where: Row }) => { assert.equal(where.tenantId, "a"); assert.equal(where.eventType, "COST_RULE_VALIDITY_CORRECTED"); return [correction]; } },
     marketingCostRule: { findMany: async ({ where }: { where: Row }) => { assert.equal(where.tenantId, "a"); return [{ ...rule(), validFrom: day("2026-04-01") }]; } }, metaAdAccount: { aggregate: async () => ({ _max: { lastSyncedAt: null } }) } };
   const db = { $transaction: async (run: (tx: unknown) => unknown, options: Row) => { assert.equal(options.isolationLevel, "RepeatableRead"); return run(tx); } } as unknown as typeof prisma;

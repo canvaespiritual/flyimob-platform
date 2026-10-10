@@ -93,10 +93,10 @@ test("Meta status predicates prefer effective status with source fallback", () =
 
 test("priority groups paginate globally and current responsible uses canonical ID", async () => {
   const visited: string[] = [];
-  const db = database({ marketingCampaign: {
+  const db = database({ operationPerson:{findMany:async()=>[{id:"person-a"}]},marketingCampaign: {
     count: async ({ where }: { where: { AND: Record<string, unknown>[] } }) => {
       const scoped = where.AND[0]; assert.equal(scoped.tenantId, owner.tenant.id);
-      const assignment = scoped.assignments as { some: Record<string, unknown> }; assert.equal(assignment.some.personId, "person-a");
+      const assignment = (scoped.OR as {assignments:{some:Record<string,unknown>}}[])[0].assignments; assert.deepEqual(assignment.some.personId, {in:["person-a"]});
       return where.AND[1].AND ? 1 : 15;
     },
     findMany: async ({ where, skip, take, orderBy }: { where: { AND: Record<string, unknown>[] }; skip: number; take: number; orderBy: unknown }) => {

@@ -95,7 +95,7 @@ function aprilFixture() {
  Object.assign(f.db.marketingMoneyMovement,{count:async()=>0,findMany:async()=>[]});
  Object.assign(f.db.marketingCostRule,{findMany:async()=>[{id:'rule',percentage:D('12.15'),validFrom:day('2026-04-05'),validTo:null}]});
  Object.assign(f.db.marketingAuditEvent,{findMany:async()=>[{metadata:{after:{affectedFrom:'2026-04-05',affectedTo:'2026-10-05'}}}]});
- Object.assign(f.db.metaAdAccount,{findMany:async({where}:{where:{tenantId:string;id?:string}})=>{assert.equal(where.tenantId,'tenant');return !where.id||where.id==='account'?[{id:'account',name:'Synthetic',currency:'BRL',timezone:'America/Noronha',status:'ACTIVE',sourceAccountStatus:1,lastSyncedAt:day('2026-10-05')}]:[];}});
+ Object.assign(f.db.metaAdAccount,{findMany:async({where}:{where:{tenantId:string;id?:{in:string[]}}})=>{assert.equal(where.tenantId,'tenant');return !where.id||where.id.in.includes('account')?[{id:'account',name:'Synthetic',currency:'BRL',timezone:'America/Noronha',status:'ACTIVE',sourceAccountStatus:1,lastSyncedAt:day('2026-10-05')}]:[];}});
  return f;
 }
 for(const [from,to,expected,accumulated] of [
@@ -128,8 +128,8 @@ test('historical contributions and adjustments affect accumulated position witho
 });
 test('Pulmão account and person filters preserve scope and do not leak other accounts',async()=>{
  const params=new URLSearchParams('period=custom&from=2026-04-01&to=2026-04-20&accountId=foreign');
- assert.deepEqual((await marketingLung(viewer,params,aprilFixture().db)).table,[]);
- params.set('accountId','account');params.set('personId','foreign');assert.deepEqual((await marketingLung(viewer,params,aprilFixture().db)).table,[]);
+ await assert.rejects(()=>marketingLung(viewer,params,aprilFixture().db),/Seleção não encontrada/);
+ params.set('accountId','account');params.set('personId','foreign');await assert.rejects(()=>marketingLung(viewer,params,aprilFixture().db),/Seleção não encontrada/);
 });
 test('corrected spend is rounded per day and does not overwrite imported snapshots',()=>{
  const rows=[['2026-04-07','8.19'],['2026-04-08','11.89'],['2026-04-09','8.91'],['2026-04-10','2.71']].map(([date,value])=>({...metric(value),date:day(date),metaSpend:D(value),campaign:{...metric().campaign,name:'c',purpose:'CLIENTES',assignments:[{brokerId:'person',personId:'person',validFrom:day('2026-01-01'),validTo:null,broker:{name:'Person'}}]}}));

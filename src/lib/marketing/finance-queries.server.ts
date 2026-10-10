@@ -1,3 +1,4 @@
+import { selectionIds, assertSelection } from "./filter-selection";
 import { isRecoverableFunding } from "./funding-policy";
 import { Prisma, OperationalRole } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
@@ -24,20 +25,24 @@ export async function moneyMovementList(viewer: MarketingViewer, params: URLSear
  const page=Number(params.get("page")??1);if(!Number.isSafeInteger(page)||page<1||page>100000)throw new MarketingError(400,"Página inválida.");
  const origin=params.get("origin"),status=params.get("status");
  if(origin&&!['PERSON','FLYIMOB','OTHER'].includes(origin)||status&&!['PENDING','CONFIRMED','CANCELLED'].includes(status))throw new MarketingError(400,"Filtro inválido.");
+ const selectedAccounts=selectionIds(params,"accountId"),selectedPeople=selectionIds(params,"personId");
+ if(selectedAccounts.length)assertSelection(selectedAccounts,await db.metaAdAccount.findMany({where:{tenantId,id:{in:selectedAccounts}},select:{id:true}}));
  let personIds:string[]|undefined;
- if(params.get("personId")||role){
+ if(selectedPeople.length||role){
   const people=await db.operationPerson.findMany({where:{tenantId},select:{id:true,mergedIntoId:true,operationalRole:true}});
-  const target=params.get("personId")?resolveOperationalIdentity(people,params.get("personId")!):null;
-  personIds=people.filter(p=>(!target||resolveOperationalIdentity(people,p.id)===target)&&(!role||people.find(root=>root.id===resolveOperationalIdentity(people,p.id))?.operationalRole===role)).map(p=>p.id);
+  assertSelection(selectedPeople,people);
+  const targets=new Set(selectedPeople.map(id=>resolveOperationalIdentity(people,id)));
+  personIds=people.filter(p=>(!targets.size||targets.has(resolveOperationalIdentity(people,p.id)))&&(!role||people.find(root=>root.id===resolveOperationalIdentity(people,p.id))?.operationalRole===role)).map(p=>p.id);
  }
- const where:Prisma.MarketingMoneyMovementWhereInput={tenantId,effectiveDate:{gte:day(range.from),lte:day(range.to)},...(params.get("accountId")?{accountId:params.get("accountId")!}:{}),...(personIds?{OR:[{beneficiaryPersonId:{in:personIds}},{beneficiaryPersonId:null,personId:{in:personIds},fundingNature:{notIn:["GLOBAL","RECOMPOSE_CASH"]}}]}:{}),...(origin?{origin}:{}),...(status?{status}:{})};
+ const where:Prisma.MarketingMoneyMovementWhereInput={tenantId,effectiveDate:{gte:day(range.from),lte:day(range.to)},...(selectedAccounts.length?{accountId:{in:selectedAccounts}}:{}),...(personIds?{OR:[{beneficiaryPersonId:{in:personIds}},{beneficiaryPersonId:null,personId:{in:personIds},fundingNature:{notIn:["GLOBAL","RECOMPOSE_CASH"]}}]}:{}),...(origin?{origin}:{}),...(status?{status}:{})};
  const [items,total]=await Promise.all([db.marketingMoneyMovement.findMany({where,select:{id:true,kind:true,origin:true,beneficiaryPersonId:true,fundingNature:true,fundingMovementId:true,distributionMovementId:true,externalReference:true,recoveryMethod:true,affectsPhysicalBalance:true,adjustmentType:true,status:true,effectiveDate:true,amount:true,currency:true,note:true,reason:true,version:true,createdAt:true,updatedAt:true,account:{select:{id:true,name:true}},person:{select:{id:true,name:true,operationalRole:true,active:true}},beneficiary:{select:{id:true,name:true,operationalRole:true,active:true}},distributions:{where:{tenantId,status:{not:"CANCELLED"}},select:{amount:true,status:true}},settlements:{where:{tenantId,status:{not:"CANCELLED"}},select:{amount:true,status:true}},createdBy:{select:{name:true}},receipts:{select:{id:true,originalName:true,createdAt:true}}},orderBy:[{effectiveDate:"desc"},{createdAt:"desc"},{id:"desc"}],skip:(page-1)*20,take:20}),db.marketingMoneyMovement.count({where})]);
  return {items:items.map(m=>({...m,amount:m.amount.toFixed(2),settlements:undefined,distributions:undefined,availableToDistribute:m.kind==="CONTRIBUTION"&&m.status==="CONFIRMED"&&!m.beneficiaryPersonId&&(["GLOBAL","RECOMPOSE_CASH"].includes(m.fundingNature)||m.fundingNature==="STANDARD"&&m.origin==="FLYIMOB")?m.amount.minus((m.distributions??[]).reduce((sum,s)=>sum.plus(s.amount),toDecimal(0))).toFixed(2):null,beneficiary:m.beneficiary??(m.origin==="PERSON"&&!["GLOBAL","RECOMPOSE_CASH"].includes(m.fundingNature)?m.person:null),outstandingPrincipal:isRecoverableFunding(m.fundingNature)&&m.status==="CONFIRMED"?m.amount.minus(m.settlements.filter(s=>s.status==="CONFIRMED").reduce((sum,s)=>sum.plus(s.amount),toDecimal(0))).toFixed(2):null,availableToSettle:isRecoverableFunding(m.fundingNature)&&m.status==="CONFIRMED"?m.amount.minus(m.settlements.reduce((sum,s)=>sum.plus(s.amount),toDecimal(0))).toFixed(2):null})),total,page,...range,canWrite:viewer.user.role==="OWNER"};
 }
 async function lungData(viewer: MarketingViewer,params:URLSearchParams,db=prisma,now=new Date()) {
  authorize(viewer);const tenantId=viewer.tenant.id,range=period(params,civilToday("America/Sao_Paulo",now)),role=roleFilter(params);
- const accountId=params.get("accountId"),personFilter=params.get("personId");
- const accounts=await db.metaAdAccount.findMany({where:{tenantId,...(accountId?{id:accountId}:{})},select:{id:true,name:true,currency:true,timezone:true,status:true,sourceAccountStatus:true,lastSyncedAt:true},orderBy:{name:"asc"}});
+ const selectedAccounts=selectionIds(params,"accountId"),personFilter=selectionIds(params,"personId");
+ const accounts=await db.metaAdAccount.findMany({where:{tenantId,...(selectedAccounts.length?{id:{in:selectedAccounts}}:{})},select:{id:true,name:true,currency:true,timezone:true,status:true,sourceAccountStatus:true,lastSyncedAt:true},orderBy:{name:"asc"}});
+ assertSelection(selectedAccounts,accounts);
  const accountIds=accounts.map(a=>a.id),through=day(range.to),from=day(range.from),historyThrough=day([range.to,civilToday("America/Sao_Paulo",now),...accounts.map(a=>civilToday(a.timezone,now))].sort().at(-1)!);
  const metricWhere={tenantId,date:{lte:historyThrough},campaign:{tenantId,accountId:{in:accountIds}}};
  if(await db.marketingDailyMetric.count({where:metricWhere})>250000||await db.marketingMoneyMovement.count({where:{tenantId,accountId:{in:accountIds},effectiveDate:{lte:historyThrough}}})>100000)throw new MarketingError(400,"Histórico muito grande. Filtre por conta.");
@@ -50,6 +55,8 @@ async function lungData(viewer: MarketingViewer,params:URLSearchParams,db=prisma
   Promise.all(accounts.map(a=>db.marketingBalanceSnapshot.findFirst({where:{tenantId,accountId:a.id},orderBy:[{observedAt:"desc"},{id:"desc"}]}))),
   db.marketingAuditEvent.findMany({where:{tenantId,eventType:costCorrectionEvent},select:{metadata:true}})
  ]);
+ assertSelection(personFilter,people);
+ const selectedPeople=new Set(personFilter.map(id=>resolveOperationalIdentity(people,id)));
  const rules=events.length?await db.marketingCostRule.findMany({where:{tenantId},select:{id:true,percentage:true,validFrom:true,validTo:true},orderBy:{validFrom:"asc"}}):[];
  const resolve=(id:string)=>resolveOperationalIdentity(people,id);
  const rows=applyCostCorrections(rawMetrics.map(m=>({...m,campaign:{...m.campaign,assignments:m.campaign.assignments.map(a=>({...a,personId:a.personId??a.broker?.personId??null,broker:a.person??a.broker??{name:"Legado"}}))}})),rules,events);
@@ -62,7 +69,7 @@ async function lungData(viewer: MarketingViewer,params:URLSearchParams,db=prisma
   const recent=rows.filter(m=>m.currency===l.currency && m.state==="CONFIRMED" && m.date>=new Date(through.getTime()-6*86400000) && m.date<=through && resolve(m.campaign.assignments.find(a=>a.validFrom<=m.date&&(!a.validTo||m.date<a.validTo))?.personId??"UNASSIGNED")===l.id);
   const daily=roundMoney(recent.reduce((sum,m)=>sum.plus(m.metaSpend??0),toDecimal(0)).div(7));
   return {...l,name:p?.name??({FLYIMOB:"Flyimob",OTHER:"Outras origens",UNASSIGNED:"Consumo sem responsável"}[l.id]??"Responsável legado"),role:p?.operationalRole??null,active:p?.active??true,activeCampaigns,dailyMetaSpend:daily.toFixed(2),situation:toDecimal(l.operationalCredit).gt(0)?"CRÉDITO OPERACIONAL":activeCampaigns?"COM MÍDIA":"SEM CAMPANHA ATIVA"};
- }).filter(l=>(!personFilter||l.id===resolve(personFilter))&&(!role||l.role===role));
+ }).filter(l=>(!selectedPeople.size||selectedPeople.has(l.id))&&(!role||l.role===role));
  const physical=await Promise.all(accounts.map(async a=> {
   const snapshot=latestSnapshots.find(s=>s?.accountId===a.id)??null;
   const today=civilToday(a.timezone,now),yesterday=new Date(day(today).getTime()-86400000),start=new Date(yesterday.getTime()-6*86400000);
@@ -99,7 +106,7 @@ async function lungData(viewer: MarketingViewer,params:URLSearchParams,db=prisma
   const completeBalances=acc.length>0&&acc.every(a=>a.snapshot?.state==="AVAILABLE"&&!a.stale);
   const incoming=movements.filter(m=>m.currency===currency&&m.kind==='CONTRIBUTION'&&m.status==='CONFIRMED'&&m.effectiveDate>=from&&m.effectiveDate<=through).filter(m=>{
     const id=m.beneficiaryPersonId??(m.origin==='PERSON'&&!['GLOBAL','RECOMPOSE_CASH'].includes(m.fundingNature)?m.personId:null),person=id?people.find(p=>p.id===resolve(id)):null;
-    return (!personFilter||id&&resolve(id)===resolve(personFilter))&&(!role||person?.operationalRole===role);
+    return (!selectedPeople.size||id&&selectedPeople.has(resolve(id)))&&(!role||person?.operationalRole===role);
   }).reduce((sum,m)=>sum.plus(m.amount),toDecimal(0));
   return {currency,globalPeriodContributions:movements.filter(m=>m.currency===currency&&m.status==='CONFIRMED'&&m.kind==='CONTRIBUTION'&&m.effectiveDate>=from&&m.effectiveDate<=through).reduce((s,m)=>s.plus(m.amount),toDecimal(0)).toFixed(2),periodBeneficiaryDistributions:personRows.reduce((s,r)=>s.plus(r.periodDistributions),toDecimal(0)).toFixed(2),availableBalance:acc.some(a=>a.snapshot?.state==="AVAILABLE"&&!a.stale)?available.toFixed(2):null,completeBalances,dailyMetaSpend:daily?.toFixed(2)??null,autonomyDays:completeBalances&&daily&&daily.gt(0)?available.div(daily).toFixed(1):null,periodContributions:incoming.toFixed(2),flyimobPosition:capital.toFixed(2),operationalCredit:credit.toFixed(2),flyimobReceivable:receivable.toFixed(2),flyimobRecoveredExternal:recoveredExternal.toFixed(2),bonuses:personRows.reduce((sum,r)=>sum.plus(r.bonuses),toDecimal(0)).toFixed(2),forgiven:personRows.reduce((sum,r)=>sum.plus(r.forgiven),toDecimal(0)).toFixed(2),losses:personRows.reduce((sum,r)=>sum.plus(r.losses),toDecimal(0)).toFixed(2),unfundedConsumption:unfunded.toFixed(2),flyimobPotentialExposure:receivable.plus(potential).toFixed(2),operatingPeople:personRows.filter(l=>l.activeCampaigns>0&&toDecimal(l.dailyMetaSpend).gt(0)).length};
  });

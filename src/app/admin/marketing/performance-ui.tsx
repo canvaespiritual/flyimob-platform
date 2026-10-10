@@ -1,4 +1,5 @@
 "use client";
+import { MultiFilter } from "./multi-filter";
 import {useEffect,useState,type FormEvent} from 'react';
 import type {PerformanceReport} from '@/lib/marketing/performance.server';
 import {change} from '@/lib/marketing/performance';
@@ -24,9 +25,9 @@ export function PerformanceScreen(){
   <form onSubmit={filter} className="flex flex-wrap items-end gap-3 rounded-xl border bg-white p-4">
    <label className="grid gap-1 text-sm">Período<select name="period" defaultValue="month" className={field}><option value="week">Últimos 7 dias</option><option value="month">Mês até hoje</option><option value="previous">Mês anterior completo</option><option value="custom">Personalizado</option></select></label>
    <label className="grid gap-1 text-sm">De<input name="from" type="date" className={field}/></label><label className="grid gap-1 text-sm">Até<input name="to" type="date" className={field}/></label>
-   <label className="grid gap-1 text-sm">Conta Meta<select name="accountId" className={field}><option value="">Todas as contas</option>{options?.accounts.map(a=><option key={a.id} value={a.id}>{a.name} ({a.currency})</option>)}</select></label>
+   <MultiFilter name="accountId" label="Conta Meta" kind="contas" options={options?.accounts.map(a=>({id:a.id,name:`${a.name} · ${a.currency}`}))??[]}/>
    <label className="grid gap-1 text-sm">Moeda<select name="currency" className={field}><option>BRL</option>{[...new Set(options?.accounts.map(a=>a.currency))].filter(c=>c!=='BRL').map(c=><option key={c}>{c}</option>)}</select></label>
-   <label className="grid gap-1 text-sm">Responsáveis (Ctrl para vários)<select name="personId" multiple className={`${field} h-24`}><option value="">Todos</option><option value="unassigned">Sem responsável</option>{options?.brokers.map(b=><option key={b.id} value={b.id}>{b.name}</option>)}</select></label>
+   <MultiFilter name="personId" label="Responsável" kind="responsáveis" options={[{id:"unassigned",name:"Sem responsável"},...(options?.brokers??[])]}/>
    <label className="grid gap-1 text-sm">Comparação<select name="compare" className={field}><option value="true">Período anterior equivalente</option><option value="false">Desativada</option></select></label><button className="rounded-lg bg-teal-700 px-4 py-2 text-white">Aplicar filtros</button>
   </form>
   {error&&<p role="alert" className="rounded-lg bg-red-50 p-4 text-red-800">{error}</p>}{!data&&!error&&<p role="status">Carregando dados sincronizados…</p>}

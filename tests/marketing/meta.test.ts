@@ -223,7 +223,7 @@ test("same broker consolidates accounts/connections across daily assignment hist
 });
 test("successful empty account sync still exposes last update scoped to the tenant and selected account", async () => {
   const now = new Date();
-  const database = db({ metaAdAccount: { findFirst: async () => ({ timezone: "Asia/Tokyo" }), aggregate: async ({ where }: { where: object }) => { assert.deepEqual(where, { tenantId: "tenant", id: "account" }); return { _max: { lastSyncedAt: now } }; } },
+  const database = db({ metaAdAccount: { findMany: async () => [{id:"account",timezone: "Asia/Tokyo"}], aggregate: async ({ where }: { where: object }) => { assert.deepEqual(where, { tenantId: "tenant", id: {in:["account"]} }); return { _max: { lastSyncedAt: now } }; } },
     marketingDailyMetric: { count: async () => 0, findMany: async () => [] } });
   const result = await overview(viewer, new URLSearchParams("period=today&accountId=account"), database);
   assert.equal(result.lastSyncedAt, now); assert.equal(result.totals.length, 0); assert.ok(result.timezoneNote.includes("Asia/Tokyo"));

@@ -1,3 +1,4 @@
+import { selectionIds, assertSelection } from "./filter-selection";
 import { Prisma, MarketingPurpose, MarketingTrackingStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { authorize, civilToday, day, MarketingError, period, type MarketingViewer } from "./policy";
@@ -32,14 +33,14 @@ export async function campaignList(viewer: MarketingViewer, params: URLSearchPar
   const where: Prisma.MarketingCampaignWhereInput = { tenantId };
   const q = params.get("q")?.trim(); if (q && q.length > 160) throw new MarketingError(400, "Busca muito longa.");
   if (q) where.name = { contains: q, mode: "insensitive" };
-  if (params.get("accountId")) where.accountId = params.get("accountId")!;
+  const accounts=selectionIds(params,"accountId"),brokers=selectionIds(params,"brokerId");
+  if(accounts.length){assertSelection(accounts,await db.metaAdAccount.findMany({where:{tenantId,id:{in:accounts}},select:{id:true}}));where.accountId={in:accounts};}
+  if(brokers.some(id=>id!=="unassigned"))assertSelection(brokers,await db.operationPerson.findMany({where:{tenantId},select:{id:true}}),true);
   const purpose = params.get("purpose"); const status = params.get("status");
   if (purpose) { if (!Object.values(MarketingPurpose).includes(purpose as MarketingPurpose)) throw new MarketingError(400, "Finalidade inválida."); where.purpose = purpose as MarketingPurpose; }
   if (status) { if (!Object.values(MarketingTrackingStatus).includes(status as MarketingTrackingStatus)) throw new MarketingError(400, "Status inválido."); where.trackingStatus = status as MarketingTrackingStatus; }
   const current = { cancelledAt: null, validFrom: { lte: day(civilToday()) }, OR: [{ validTo: null }, { validTo: { gt: day(civilToday()) } }] };
-  const brokerId = params.get("brokerId");
-  if (brokerId === "unassigned") where.assignments = { none: current };
-  else if (brokerId) where.assignments = { some: { ...current, personId: brokerId } };
+  if(brokers.length)where.OR=[...(brokers.includes("unassigned")?[{assignments:{none:current}}]:[]),{assignments:{some:{...current,personId:{in:brokers.filter(id=>id!=="unassigned")}}}}];
   const metaStatus = params.get("metaStatus") || (q ? "ALL" : "ACTIVE");
   if (!["ALL", "ACTIVE", "PAUSED", "OTHER"].includes(metaStatus)) throw new MarketingError(400, "Status Meta inválido.");
   const groups = (metaStatus === "ALL" ? ["ACTIVE", "PAUSED", "OTHER"] : [metaStatus]) as ("ACTIVE" | "PAUSED" | "OTHER")[];
@@ -81,12 +82,16 @@ export async function overview(viewer: MarketingViewer, params: URLSearchParams,
 }
 async function overviewReport(viewer: MarketingViewer, params: URLSearchParams, db: Prisma.TransactionClient) {
   authorize(viewer); const tenantId = viewer.tenant.id;
-  const selectedAccount = params.get("accountId") ? await db.metaAdAccount.findFirst({ where: { tenantId, id: params.get("accountId")! }, select: { timezone: true } }) : null;
+  const accountIds=selectionIds(params,"accountId"),brokerIds=selectionIds(params,"brokerId");
+  const accounts=accountIds.length?await db.metaAdAccount.findMany({where:{tenantId,id:{in:accountIds}},select:{id:true,timezone:true}}):[];
+  assertSelection(accountIds,accounts);
+  if(brokerIds.length)assertSelection(brokerIds,await db.operationPerson.findMany({where:{tenantId},select:{id:true}}),true);
+  const selectedAccount=accounts.length===1?accounts[0]:null;
   const range = period(params, civilToday(selectedAccount?.timezone ?? "America/Sao_Paulo"));
   const purpose = params.get("purpose") || "CLIENTES";
   if (purpose !== "ALL" && !Object.values(MarketingPurpose).includes(purpose as MarketingPurpose)) throw new MarketingError(400, "Finalidade inválida.");
   const campaign: Prisma.MarketingCampaignWhereInput = { tenantId, ...(purpose !== "ALL" ? { purpose: purpose as MarketingPurpose } : {}),
-    ...(params.get("accountId") ? { accountId: params.get("accountId")! } : {}), ...(params.get("campaignId") ? { id: params.get("campaignId")! } : {}) };
+    ...(accountIds.length ? { accountId: {in:accountIds} } : {}), ...(params.get("campaignId") ? { id: params.get("campaignId")! } : {}) };
   const where = { tenantId, date: { gte: day(range.from), lte: day(range.to) }, campaign };
   // Bound response size; campaign count has its own paginated management screen.
   if (await db.marketingDailyMetric.count({ where }) > 100000) throw new MarketingError(400, "Muitos dados. Reduza o período ou filtre por conta/campanha.");
@@ -97,9 +102,10 @@ async function overviewReport(viewer: MarketingViewer, params: URLSearchParams, 
     AND: [{ metadata: { path: ["after", "affectedFrom"], lte: range.to } }, { metadata: { path: ["after", "affectedTo"], gt: range.from } }] }, select: { metadata: true } }) : [];
   const rules = corrections.length ? await db.marketingCostRule.findMany({ where: { tenantId }, select: { id: true, percentage: true, validFrom: true, validTo: true }, orderBy: { validFrom: "asc" } }) : [];
   const reportRows = applyCostCorrections(rows.map(row => ({ ...row, campaign: { ...row.campaign, sourceStatus: row.campaign.effectiveStatus ?? row.campaign.sourceStatus, assignments: row.campaign.assignments.map(identity) } })), rules, corrections);
-  const latest = await db.metaAdAccount.aggregate({ where: { tenantId, ...(params.get("accountId") ? { id: params.get("accountId")! } : {}) }, _max: { lastSyncedAt: true } });
-  return { ...summarize(reportRows, params.get("brokerId") || undefined), ...range, purpose, lastSyncedAt: latest._max.lastSyncedAt,
-    canSync: viewer.user.role === "OWNER", preferenceKey: `${tenantId}:${viewer.user.id}`, hasAnyMetrics: rows.length > 0,
+  const latest = await db.metaAdAccount.aggregate({ where: { tenantId, ...(accountIds.length ? { id: {in:accountIds} } : {}) }, _max: { lastSyncedAt: true } });
+  const report=summarize(reportRows,brokerIds);
+  return { ...report, ...range, purpose, lastSyncedAt: latest._max.lastSyncedAt,
+    canSync: viewer.user.role === "OWNER", preferenceKey: `${tenantId}:${viewer.user.id}`, hasAnyMetrics: report.campaigns.length > 0 || report.unavailable > 0,
     timezoneNote: `Datas representam dias locais das contas. Atalhos usam ${selectedAccount?.timezone ?? "America/Sao_Paulo (visão de várias contas)"}.` };
 }
 export async function settings(viewer: MarketingViewer, db = prisma) {

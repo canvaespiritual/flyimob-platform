@@ -145,7 +145,7 @@ test("campaign list scopes tenant, filters purpose/status and uses paginated cur
   const db = database({ marketingCampaign: { findMany: async (args: { where: Record<string, unknown>; take: number; skip: number }) => {
     const where = (args.where.AND as Record<string, unknown>[])[0];
     assert.equal(where.tenantId, "a"); assert.equal(where.purpose, "RECRUTAMENTO"); assert.equal(args.take, 20); assert.equal(args.skip, 20);
-    assert.ok(where.assignments); return [];
+    assert.ok(where.OR); return [];
   }, count: async () => 40 } });
   assert.equal((await campaignList(director, new URLSearchParams("page=2&purpose=RECRUTAMENTO&brokerId=unassigned"), db)).page, 2);
   await assert.rejects(campaignList(owner, new URLSearchParams("page=0"), db), /Página/);

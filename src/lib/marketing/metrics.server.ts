@@ -57,7 +57,8 @@ export type ReportRow = {
   impressions?: bigint | null; clicks?: bigint | null; linkClicks?: bigint | null;
   campaign: { id: string; name: string; purpose: string; sourceStatus?: string | null; account?: { name: string; timezone: string }; assignments: { brokerId: string | null; validFrom: Date; validTo: Date | null; broker: { name: string } }[] };
 };
-export function summarize(rows: ReportRow[], brokerFilter?: string) {
+export function summarize(rows: ReportRow[], brokerFilter?: string | string[]) {
+  const selected = new Set(typeof brokerFilter === "string" ? [brokerFilter] : brokerFilter ?? []);
   type Acc = { currency: string; meta: Prisma.Decimal; effective: Prisma.Decimal; leads: number; rows: number; impressions?: bigint | null; clicks?: bigint | null; linkClicks?: bigint | null };
   const totals = new Map<string, Acc>(); const brokers = new Map<string, { id: string | null; name: string; amount: Acc }>();
   const campaigns = new Map<string, { id: string; name: string; purpose: string; account: string; status: string | null; brokers: Set<string>; amount: Acc }>();
@@ -68,7 +69,7 @@ export function summarize(rows: ReportRow[], brokerFilter?: string) {
   };
   for (const row of rows) {
     const assignment = row.campaign.assignments.find(item => item.validFrom <= row.date && (!item.validTo || row.date < item.validTo));
-    if (brokerFilter && (brokerFilter === "unassigned" ? !!assignment : assignment?.brokerId !== brokerFilter)) continue;
+    if (selected.size && !selected.has(assignment?.brokerId ?? "unassigned")) continue;
     if (row.state !== "CONFIRMED" || row.metaSpend === null || row.effectiveSpend === null || row.leads === null) { unavailable++; continue; }
     const total = add(totals, row.currency);
     const brokerKey = `${assignment?.brokerId ?? "unassigned"}:${row.currency}`;

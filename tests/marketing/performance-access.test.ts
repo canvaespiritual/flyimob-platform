@@ -18,8 +18,8 @@ test('endpoint recusa anônimo e corretor/gerente antes de consultar métricas',
  }
 });
 test('conta externa à operação é rejeitada antes da consulta de gastos',async()=>{
- const db={$transaction:async(fn:(tx:unknown)=>unknown)=>fn({metaAdAccount:{findMany:async({where}:{where:{tenantId:string;id:string}})=>{assert.equal(where.tenantId,'operation');assert.equal(where.id,'outside');return [];}}})} as unknown as Parameters<typeof marketingPerformance>[2];
- await assert.rejects(()=>marketingPerformance(viewer,new URLSearchParams('accountId=outside&tenantId=another'),db),/Conta não encontrada/);
+ const db={$transaction:async(fn:(tx:unknown)=>unknown)=>fn({metaAdAccount:{findMany:async({where}:{where:{tenantId:string;id:{in:string[]}}})=>{assert.equal(where.tenantId,'operation');assert.deepEqual(where.id,{in:['outside']});return [];}}})} as unknown as Parameters<typeof marketingPerformance>[2];
+ await assert.rejects(()=>marketingPerformance(viewer,new URLSearchParams('accountId=outside&tenantId=another'),db),/Seleção não encontrada/);
 });
 test('pessoa externa à operação é rejeitada antes da consulta de gastos',async()=>{
  const db={$transaction:async(fn:(tx:unknown)=>unknown)=>fn({metaAdAccount:{findMany:async()=>[]},operationPerson:{findMany:async({where}:{where:{tenantId:string}})=>{assert.equal(where.tenantId,'operation');return [];}}})} as unknown as Parameters<typeof marketingPerformance>[2];

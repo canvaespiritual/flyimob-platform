@@ -1,3 +1,4 @@
+import { selectionIds, assertSelection } from "./filter-selection";
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { authorize,civilToday,day,MarketingError,period,type MarketingViewer } from './policy';
@@ -8,11 +9,11 @@ import { comparisonRange,performanceSeries,salesScope,change } from './performan
 /** enforcedPersonId must originate from a future authenticated portal policy, never a request field. */
 export async function marketingPerformance(viewer:MarketingViewer,params:URLSearchParams,db=prisma,enforcedPersonId?:string,now=new Date()) {
  authorize(viewer);
- const selectedPeople=salesScope(params,enforcedPersonId);
+ const selectedPeople=salesScope(params,enforcedPersonId), selectedAccounts=selectionIds(params,"accountId");
  return db.$transaction(async tx=>{
   const tenantId=viewer.tenant.id;
-  const accounts=await tx.metaAdAccount.findMany({where:{tenantId,...(params.get('accountId')?{id:params.get('accountId')!}:{})},select:{id:true,name:true,currency:true,timezone:true,lastSyncedAt:true}});
-  if(params.get('accountId')&&!accounts.length)throw new MarketingError(404,'Conta não encontrada na operação.');
+  const accounts=await tx.metaAdAccount.findMany({where:{tenantId,...(selectedAccounts.length?{id:{in:selectedAccounts}}:{})},select:{id:true,name:true,currency:true,timezone:true,lastSyncedAt:true}});
+  assertSelection(selectedAccounts,accounts);
   const range=period(params,civilToday(accounts.length===1?accounts[0].timezone:'America/Sao_Paulo',now));
   if(range.to>civilToday(accounts.length===1?accounts[0].timezone:'America/Sao_Paulo',now))throw new MarketingError(400,'Não selecione datas futuras.');
   const previous=params.get('compare')==='false'?null:comparisonRange(range.from,range.to);
