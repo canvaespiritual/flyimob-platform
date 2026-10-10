@@ -714,7 +714,7 @@ export default function ComparativoEditorPage() {
       {/* MODAL PICKER */}
       {showPicker && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4">
-          <div className="bg-white rounded-lg w-full max-w-2xl border">
+          <div className="bg-white rounded-lg w-full max-w-2xl border max-h-[90dvh] overflow-y-auto">
             <div className="p-4 border-b flex items-center justify-between">
               <div className="font-medium">Adicionar tipologia</div>
               <button onClick={() => setShowPicker(false)} className="text-sm">

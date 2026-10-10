@@ -582,7 +582,7 @@ export default function CrmLeadsClient() {
           <div className="absolute inset-0 bg-black/40" onClick={() => !saving && setModalOpen(false)} />
 
           {/* container com altura máxima + layout flex */}
-          <div className="relative w-full max-w-2xl rounded-xl bg-white border shadow-lg max-h-[90vh] flex flex-col">
+          <div className="relative w-full max-w-2xl rounded-xl bg-white border shadow-lg max-h-[90dvh] flex flex-col">
             {/* header fixo */}
             <div className="px-5 py-4 border-b flex items-center justify-between shrink-0">
               <div className="font-semibold">

@@ -293,9 +293,9 @@ console.log(
 );
 
   return (
-    <main className="h-screen w-full flex flex-col">
+    <main className="h-dvh w-full flex flex-col">
       {/* ===== Topbar (logo + busca + mais + entrar) ===== */}
-      <div className="h-14 border-b flex items-center gap-2 px-3">
+      <div className="min-h-14 shrink-0 border-b flex flex-wrap items-center gap-2 p-3">
         {/* Logo */}
         <div className="flex items-center gap-2 min-w-[120px]">
           <Image
@@ -312,7 +312,7 @@ console.log(
           value={q}
           onChange={(e) => setQ(e.target.value)}
           placeholder="Buscar (nome, bairro, cidade, slug)"
-          className="border rounded px-3 py-2 w-[340px] max-w-[45vw]"
+          className="border rounded px-3 py-2 min-w-0 flex-1 w-[340px] text-base"
         />
 
         {/* Botão Mais (popover) */}
@@ -325,7 +325,7 @@ console.log(
           </button>
 
           {moreOpen && (
-            <div className="absolute left-0 mt-2 w-[340px] max-w-[90vw] bg-white border rounded shadow-lg p-3 z-50">
+            <div className="fixed left-3 right-3 md:absolute md:left-auto md:right-0 mt-2 md:w-[340px] max-h-[75dvh] overflow-y-auto bg-white border rounded shadow-lg p-3 z-50">
               <div className="flex items-center justify-between mb-2">
                 <div className="font-medium">Filtros</div>
                 <button
@@ -461,10 +461,10 @@ console.log(
       </div>
 
       {/* ===== Corpo (mapa + lista) ===== */}
-      <div className="flex-1 flex w-full">
+      <div className="flex-1 min-h-0 flex flex-col md:flex-row w-full overflow-y-auto">
         {/* Mapa */}
         <div
-  className="hidden md:block md:w-[70%]"
+  className="h-[40dvh] shrink-0 md:h-full w-full md:w-[70%]"
   onWheel={() => setUserMovedMap(true)}
   onMouseDown={() => setUserMovedMap(true)}
   onTouchStart={() => setUserMovedMap(true)}

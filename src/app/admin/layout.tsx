@@ -2,6 +2,8 @@
 import AdminShell from "./AdminShell";
 import { requireUser } from "@/lib/authz.server";
 import { redirect } from "next/navigation";
+import type { Metadata } from "next";
+export const metadata: Metadata = { manifest: "/corretor.webmanifest", appleWebApp: { capable: true, title: "Flyimob", statusBarStyle: "default" }, icons: { apple: "/academy-admin/apple-touch-icon.png" } };
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const s = await requireUser();

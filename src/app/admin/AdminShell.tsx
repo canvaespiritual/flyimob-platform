@@ -2,9 +2,10 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { UserRole } from "@prisma/client";
 import { hasPermission } from "@/lib/rbac";
+import CorretorPwa from "@/components/CorretorPwa";
 
 type NavItem = { href: string; label: string; perm?: Parameters<typeof hasPermission>[1] };
 
@@ -33,7 +34,7 @@ function Sidebar({
   tenantSlug: string;
 }) {
   return (
-    <aside className="h-full w-[260px] border-r bg-white flex flex-col">
+    <aside className="h-full w-[260px] max-w-[85vw] overflow-y-auto border-r bg-white flex flex-col">
       <div className="h-16 px-4 flex items-center gap-3 border-b">
         <img src="/brand/flyimob-icon.png" alt="FlyImob" className="w-9 h-9" />
         <div className="leading-tight">
@@ -42,7 +43,8 @@ function Sidebar({
         </div>
       </div>
 
-      <nav className="p-3 space-y-1">
+      <nav className="p-3 space-y-1" aria-label="Menu principal">
+        {onNavigate && <button onClick={onNavigate} className="w-full border rounded p-3 mb-2">Fechar menu</button>}
         {nav.map((item) => {
           const active = isActive(pathname, item.href);
           return (
@@ -96,6 +98,24 @@ export default function AdminShell({
 }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
+  const drawer = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const previous = document.activeElement as HTMLElement | null;
+    const oldOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const focusable = () => Array.from(drawer.current?.querySelectorAll<HTMLElement>("button, a[href], input, select, textarea, [tabindex='0']") ?? []);
+    focusable()[0]?.focus();
+    const key = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+      if (e.key !== "Tab") return;
+      const nodes = focusable(), first = nodes[0], last = nodes.at(-1);
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last?.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first?.focus(); }
+    };
+    document.addEventListener("keydown", key);
+    return () => { document.body.style.overflow = oldOverflow; document.removeEventListener("keydown", key); previous?.focus(); };
+  }, [open]);
 
     const nav = useMemo<NavItem[]>(() => {
     const base = ALL_NAV.filter((i) => !i.perm || hasPermission(userRole, i.perm));
@@ -117,6 +137,7 @@ if (
 ) {
   return [
     ...base,
+    { href: "/admin/treinamentos/acessos", label: "Acesso a treinamentos" },
     {
       href: "/admin/marketing",
       label: "Marketing",
@@ -133,7 +154,7 @@ if (
   ];
 }
 
-if (!isPlatform && userRole === "BROKER") return [...base, { href: "/documentacoes", label: "Minhas documentações" }];
+if (!isPlatform && userRole === "BROKER") return [...base, { href: "/documentacoes", label: "Minhas documentações" }, { href: "/admin/treinamentos", label: "Treinamentos" }];
 return base;
   }, [userRole, isPlatform]);
 
@@ -147,7 +168,7 @@ return base;
         {open && (
           <div className="fixed inset-0 z-[9999] md:hidden">
             <div className="absolute inset-0 bg-black/40" onClick={() => setOpen(false)} />
-            <div className="absolute left-0 top-0 h-full">
+            <div ref={drawer} role="dialog" aria-modal="true" aria-label="Navegação" className="absolute left-0 top-0 h-full">
               <Sidebar
                 pathname={pathname}
                 nav={nav}
@@ -159,18 +180,19 @@ return base;
         )}
 
         <div className="flex-1 flex flex-col min-w-0">
-          <header className="h-16 border-b bg-white px-4 md:px-6 flex items-center justify-between">
+          <header className="min-h-16 border-b bg-white px-3 md:px-6 py-2 flex flex-wrap gap-2 items-center justify-between">
             <div className="flex items-center gap-3">
               <button
                 type="button"
                 className="md:hidden border rounded px-3 py-2 hover:bg-gray-50"
                 onClick={() => setOpen(true)}
                 aria-label="Abrir menu"
+                aria-expanded={open}
               >
                 ☰
               </button>
 
-              <div className="text-sm text-gray-700">
+              <div className="text-sm text-gray-700 max-w-[45vw] break-words">
                 {tenantName} • <span className="font-mono">{tenantSlug}</span>
               </div>
             </div>
@@ -193,7 +215,7 @@ return base;
             </div>
           </header>
 
-          <main className="flex-1 px-4 md:px-6 py-6">{children}</main>
+          <main className="broker-workspace flex-1 min-w-0 px-4 md:px-6 py-6">{userRole === "BROKER" && <CorretorPwa />}{children}</main>
         </div>
       </div>
     </div>
