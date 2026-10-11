@@ -154,7 +154,7 @@ if (
   ];
 }
 
-if (!isPlatform && userRole === "BROKER") return [...base, { href: "/documentacoes", label: "Minhas documentações" }, { href: "/admin/treinamentos", label: "Treinamentos" }];
+if (!isPlatform && userRole === "BROKER") return [{ href: "/admin/corretor/dashboard", label: "Dashboard" }, { href: "/admin/corretor/marketing", label: "Marketing" }, { href: "/admin/corretor/financeiro", label: "Financeiro" }, ...base.filter(item => item.href !== "/admin/dashboard"), { href: "/documentacoes", label: "Minhas documentações" }, { href: "/admin/treinamentos", label: "Treinamentos" }];
 return base;
   }, [userRole, isPlatform]);
 

@@ -1,0 +1,2 @@
+import type { PrismaClient } from "@prisma/client";
+export type OfficeDb = Pick<PrismaClient, "user" | "operationPerson" | "financialParticipant" | "financialEntitlement" | "financialAdjustment" | "financialPayment" | "financialAttachment" | "marketingCampaign" | "marketingMoneyMovement" | "marketingAuditEvent" | "marketingDailyMetric" | "marketingCostRule" | "marketingSyncRun" | "marketingMoneyReceipt" | "cRMLead" | "documentationFolder" | "documentationDocument">;
