@@ -21,4 +21,4 @@ export function validateCourseIds(raw: unknown, allowed: string[]) {
 }
 export type Lesson = { id: string; title: string; videoSource: string; progress: { completedAt: string | null }[] };
 export type Course = { id: string; title: string; description: string | null; modules: { id: string; title: string; lessons: Lesson[] }[] };
-export type Playback = { source: "PRIVATE" | "YOUTUBE"; youtubeId?: string; url?: string; revision?: string; sessionId?: string; position?: number; percent?: number; completed?: boolean; metadata?: { duration: number } };
+export type Playback = { source: "PRIVATE" | "YOUTUBE"; youtubeId?: string; url?: string; revision?: string; sessionId?: string; sequence?: number; position?: number; percent?: number; completed?: boolean; metadata?: { duration: number } };

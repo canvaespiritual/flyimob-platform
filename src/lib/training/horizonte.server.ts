@@ -18,7 +18,22 @@ async function request(path: string, init: RequestInit) {
   let response: Response;
   try { response = await fetch(config.origin + path, { ...init, cache: "no-store", redirect: "error", signal: AbortSignal.timeout(8000) }); }
   catch { throw new TrainingError(503, "unavailable"); }
-  if (!response.ok) throw new TrainingError([403, 404, 409, 429].includes(response.status) ? response.status : 503, response.status === 404 || response.status === 403 ? "access_or_lesson_unavailable" : "upstream_error");
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null);
+    // Translate only known upstream errors; never expose arbitrary upstream text or signed URLs.
+    const upstream = payload?.code ?? payload?.error;
+    const codes: Record<string, string> = {
+      SESSION_LIMIT: "session_limit",
+      "Há cinco reproduções abertas. Aguarde sua expiração ou feche as sessões anteriores.": "session_limit",
+      SESSION_EXPIRED: "session_expired", STALE_SESSION: "stale_session", INVALID_SESSION: "invalid_session", TOO_FREQUENT: "too_frequent",
+      NOT_READY: "media_not_ready", "O vídeo ainda não está pronto para reprodução.": "media_not_ready",
+      INVALID_PROGRESS: "invalid_progress",
+    };
+    const code = codes[upstream] ?? (response.status === 401 ? "upstream_authorization" : [403, 404].includes(response.status) ? "access_or_lesson_unavailable" : response.status === 429 ? "too_frequent" : path.endsWith("/progress") && response.status === 400 ? "progress_rejected" : "upstream_error");
+    const status = response.status === 401 ? 502 : [400, 403, 404, 409, 422, 429].includes(response.status) ? response.status : 502;
+    console.warn("training_upstream_failure", { path, status: response.status, code, requestId: response.headers.get("x-railway-request-id") });
+    throw new TrainingError(status, code);
+  }
   try { return await response.json(); } catch { throw new TrainingError(502, "invalid_response"); }
 }
 export async function exchange(user: { id: string; tenantId: string; name: string }, courseIds: string[]) {

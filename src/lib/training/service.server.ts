@@ -6,7 +6,7 @@ import { brokerLoginStatus } from "./access-policy";
 type User = { id: string; tenantId: string; name: string };
 // All app instances serialize changes and upstream operations for the same identity.
 // Tokens live only for the duration of the request; no token enters the client or DB.
-export async function operate(user: User, action: "courses" | "playback" | "refresh" | "progress", lessonId?: string, body?: unknown) {
+export async function operate(user: User, action: "courses" | "playback" | "refresh" | "progress" | "close", lessonId?: string, body?: unknown) {
   return prisma.$transaction(async tx => {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${"training:" + user.id}))`;
     const current = await tx.user.findFirst({ where: { id: user.id, tenantId: user.tenantId, role: "BROKER", isActive: true } });
@@ -27,7 +27,7 @@ export async function operate(user: User, action: "courses" | "playback" | "refr
     let result: unknown = { ...catalog, lastLessonId: access.lastLessonId };
     if (action !== "courses") {
       if (!catalog.data.some(c => access.courseIds.includes(c.id) && c.modules.some(m => m.lessons.some(l => l.id === lessonId)))) throw new TrainingError(403, "access_revoked");
-      result = await learnerRequest(token, `/api/lessons/${encodeURIComponent(lessonId!)}/${action === "progress" ? "progress" : "playback"}`, action === "refresh" ? "PATCH" : "POST", body);
+      result = await learnerRequest(token, `/api/lessons/${encodeURIComponent(lessonId!)}/${action === "progress" ? "progress" : "playback"}`, action === "refresh" ? "PATCH" : action === "close" ? "DELETE" : "POST", body);
     }
     await tx.trainingAccess.update({ where: { userId: user.id }, data: { syncPending: false, syncedAt: new Date(), ...(action === "playback" ? { lastLessonId: lessonId } : {}) } });
     return result;
