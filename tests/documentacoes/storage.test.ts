@@ -8,7 +8,7 @@ import { GetPublicAccessBlockCommand, PutObjectCommand, HeadObjectCommand, GetOb
 import { prisma } from "../../src/lib/prisma";
 import { s3 } from "../../src/lib/s3";
 import { createSessionToken } from "../../src/lib/auth.server";
-import { beginUpload, uploadDocument, finalizeUpload, invalidateDocument, documentContent, listDocuments } from "../../src/lib/documentacoes/documents.server";
+import { beginUpload, uploadDocument, finalizeUpload, cancelUpload, invalidateDocument, documentContent, listDocuments } from "../../src/lib/documentacoes/documents.server";
 import { MAX_DOCUMENT_BYTES, fileMetadata, validateFile, disposition, readUpload } from "../../src/lib/documentacoes/file-policy";
 import { documentationStorage, type DocumentationStorage, type StoredDocument } from "../../src/lib/documentacoes/storage.server";
 import { documentScope, sameOrigin } from "../../src/lib/documentacoes/document-access.server";
@@ -32,7 +32,7 @@ type Args = { where: Where; data: Record<string, unknown>; select?: Record<strin
 function harness() {
   let version = 0; const documents = new Map<string, DocumentationDocument>(); const events: { eventType: string; metadata: unknown }[] = [];
   const folder = { id: "folder-a", tenantId: "tenant-a", brokerId: "broker-a", correspondentId: "correspondent-a", status: "EM_MONTAGEM", version: 0 };
-  const matches = (where: Where, row: { id: string; tenantId: string; folderId?: string; status?: string; uploadedById?: string }) => ["id", "tenantId", "folderId", "status", "uploadedById"].every(key => where[key] === undefined || typeof where[key] === "object" || where[key] === row[key as keyof typeof row]);
+  const matches = (where: Where, row: { id: string; tenantId: string; folderId?: string; status?: string; uploadedById?: string }): boolean => (!where.OR || (where.OR as Where[]).some(clause => matches(clause, row))) && ["id", "tenantId", "folderId", "status", "uploadedById"].every(key => where[key] === undefined || typeof where[key] === "object" || where[key] === row[key as keyof typeof row]);
   const tx = {
     documentationFolder: { findFirst: async ({ where }: Args) => matches(where, folder) && (!where.correspondentId || where.correspondentId === folder.correspondentId) && (!where.brokerId || where.brokerId === folder.brokerId) && (!where.OR || (where.OR as Where[]).some(clause => clause.brokerId === folder.brokerId)) ? { ...folder, version } : null,
       updateMany: async ({ where }: Args) => { if (where.version !== version) return { count: 0 }; version++; return { count: 1 }; } },
@@ -54,6 +54,44 @@ function harness() {
 const image = () => sharp({ create: { width: 2, height: 2, channels: 3, background: "white" } }).png().toBuffer();
 const body = (size: number, version = 0) => ({ originalFileName: "synthetic.png", mimeType: "image/png", fileSize: size, personId: "person-a", documentTypeId: "type-a", version });
 async function active(h: ReturnType<typeof harness>, viewer: DocumentationViewer = owner) { const bytes = await image(); const start = await beginUpload(viewer, "folder-a", body(bytes.length, h.version()), h.db, h.storage); await uploadDocument(viewer, "folder-a", start.id, bytes, h.db, h.storage); await finalizeUpload(viewer, "folder-a", start.id, { version: h.version() }, h.db, h.storage); return start.id; }
+
+test("discarding an expired attempt preserves completed documents and its audit history", async () => {
+  const h = harness(); const completed = await active(h);
+  const attempt = await beginUpload(owner, "folder-a", body(10, h.version()), h.db, h.storage);
+  h.documents.get(attempt.id)!.createdAt = new Date(0);
+  h.folder.status = "EM_ANALISE";
+  const result = await cancelUpload(owner, "folder-a", attempt.id, { version: h.version() }, h.db);
+  assert.equal(result.version, h.version());
+  assert.equal(h.documents.get(attempt.id)!.status, "INVALIDATED");
+  assert.equal(h.documents.get(completed)!.status, "ACTIVE");
+  assert.ok(h.events.some(event => event.eventType === "DOCUMENT_UPLOAD_CANCELLED"));
+  await assert.rejects(finalizeUpload(owner, "folder-a", attempt.id, { version: h.version() }, h.db, h.storage));
+});
+
+test("discard rejects active documents, foreign uploaders and stale versions atomically", async () => {
+  const h = harness(); const completed = await active(h);
+  await assert.rejects(cancelUpload(owner, "folder-a", completed, { version: h.version() }, h.db));
+  const attempt = await beginUpload(owner, "folder-a", body(10, h.version()), h.db, h.storage);
+  const version = h.version();
+  await assert.rejects(cancelUpload(correspondent, "folder-a", attempt.id, { version }, h.db), /somente tentativas/);
+  await assert.rejects(cancelUpload(owner, "folder-a", attempt.id, { version: version - 1 }, h.db));
+  assert.equal(h.version(), version);
+  assert.equal(h.documents.get(attempt.id)!.status, "PROCESSING");
+  assert.equal(h.documents.get(completed)!.status, "ACTIVE");
+  await assert.rejects(cancelUpload({ ...owner, tenant: { ...owner.tenant, id: "foreign" } }, "folder-a", attempt.id, { version }, h.db));
+});
+
+test("own incomplete attempts are visible without audit, including expired attempts", async () => {
+  const h = harness(); const bytes = await image();
+  const own = await beginUpload(correspondent, "folder-a", body(bytes.length), h.db, h.storage);
+  h.documents.get(own.id)!.createdAt = new Date(0);
+  await beginUpload(owner, "folder-a", body(bytes.length, h.version()), h.db, h.storage);
+  const listed = await listDocuments(correspondent, "folder-a", new URLSearchParams(), h.db);
+  assert.deepEqual(listed.items.map(row => row.id), [own.id]);
+  assert.equal(listed.items[0].canCancel, true);
+  assert.equal(listed.items[0].canFinalize, false);
+  assert.equal((await listDocuments(owner, "folder-a", new URLSearchParams(), h.db)).items.length, 2);
+});
 
 test("MIME, extension, size and sanitized disposition reject unsafe input", () => {
   for (const value of [{ ...body(10), mimeType: "text/html" }, { ...body(10), originalFileName: "evil.svg" }, body(MAX_DOCUMENT_BYTES + 1), body(0), { ...body(10), mimeType: "application/pdf" }]) assert.throws(() => fileMetadata(value), DocumentationError);
@@ -329,7 +367,7 @@ test("received documents are bounded to a folder/tenant snapshot; own documents 
   h.tx.documentationDocument.count = async args => { calls.push(args); return 0; };
   const own = await listDocuments(correspondent, "folder-a", new URLSearchParams("group=correspondent"), h.db);
   assert.equal(own.canUpload, true);
-  assert.deepEqual(calls[0].where, { tenantId: "tenant-a", folderId: "folder-a", status: "ACTIVE", uploadOrigin: "CORRESPONDENT" });
+  assert.deepEqual(calls[0].where, { tenantId: "tenant-a", folderId: "folder-a", OR: [{ status: "ACTIVE" }, { status: "PROCESSING", uploadedById: correspondent.user.id }], uploadOrigin: "CORRESPONDENT" });
   assert.deepEqual(calls[0].where, calls[1].where);
   calls.length = 0;
   await listDocuments(correspondent, "folder-a", new URLSearchParams("group=analysis&roundId=round-a"), h.db);

@@ -105,6 +105,18 @@ export async function finalizeUpload(session: DocumentationViewer, folderId: str
     return { id, version: version + 1 };
   });
 }
+export async function cancelUpload(session: DocumentationViewer, folderId: string, id: string, value: unknown, db = prisma) {
+  const version = integer(input(value).version, "Versão");
+  return db.$transaction(async tx => {
+    await claim(tx, session, folderId, version, true);
+    const row = await document(tx, session, folderId, id);
+    if (!canManageDocumentation(session) && row.uploadedById !== session.user.id) throw new DocumentationError(403, "Você pode descartar somente tentativas enviadas por você.");
+    const changed = await tx.documentationDocument.updateMany({ where: { id, tenantId: session.tenant.id, folderId, status: "PROCESSING" }, data: { status: "INVALIDATED", replacementReason: "Tentativa de upload descartada." } });
+    if (changed.count !== 1) throw new DocumentationError(409, "Esta tentativa já foi finalizada ou descartada. Atualize os documentos.");
+    await event(tx, session, folderId, "DOCUMENT_UPLOAD_CANCELLED", { documentId: id });
+    return { version: version + 1 };
+  });
+}
 export async function invalidateDocument(session: DocumentationViewer, folderId: string, id: string, value: unknown, db = prisma) {
   const body = input(value); const version = integer(body.version, "Versão"); const reason = text(body.reason, "Motivo", true, 1000)!;
   return db.$transaction(async tx => {
@@ -133,9 +145,9 @@ export async function listDocuments(session: DocumentationViewer, folderId: stri
   const group = params.get("group");
   if (group && !["analysis", "correspondent"].includes(group)) throw new DocumentationError(400, "Grupo documental inválido.");
   const roundId = text(params.get("roundId"), "Análise");
-  const where: Prisma.DocumentationDocumentWhereInput = { tenantId: session.tenant.id, folderId, ...(audit ? {} : { status: "ACTIVE" }),
+  const where: Prisma.DocumentationDocumentWhereInput = { tenantId: session.tenant.id, folderId, ...(audit || group === "analysis" ? {} : { OR: [{ status: "ACTIVE" }, { status: "PROCESSING", ...(admin ? {} : { uploadedById: session.user.id }) }] }),
     ...(group === "correspondent" ? { uploadOrigin: "CORRESPONDENT" } : {}),
-    ...(group === "analysis" ? roundId ? { roundDocuments: { some: { tenantId: session.tenant.id, folderId, roundId } } } : { uploadOrigin: "ADMINISTRATION" } : {}),
+    ...(group === "analysis" ? { status: "ACTIVE", ...(roundId ? { roundDocuments: { some: { tenantId: session.tenant.id, folderId, roundId } } } : { uploadOrigin: "ADMINISTRATION" }) } : {}),
   };
   const [items, total, people, types] = await Promise.all([
     db.documentationDocument.findMany({ where, select: { id: true, personId: true, documentTypeId: true, documentType: { select: { name: true } }, originalFileName: true, mimeType: true, fileSize: true, status: true, createdAt: true, checksum: true, replacedDocumentId: true, replacementReason: admin ? true : false, uploadedById: true, uploadedByRole: true, uploadOrigin: true, uploadedBy: { select: { name: true } } }, orderBy: [{ createdAt: "desc" }, { id: "desc" }], skip: (page - 1) * 30, take: 30 }),
@@ -144,6 +156,6 @@ export async function listDocuments(session: DocumentationViewer, folderId: stri
     db.documentationDocumentType.findMany({ where: { tenantId: session.tenant.id, isActive: true }, select: { id: true, name: true }, orderBy: [{ sortOrder: "asc" }, { name: "asc" }] }),
   ]);
   const correctionsAllowed = editable.some(status => status === current.status);
-  return { items: items.map(row => ({ ...row, fileSize: Number(row.fileSize), canCorrect: correctionsAllowed && canCorrect(session, row), canFinalize: (!row.replacedDocumentId || correctionsAllowed) && row.status === "PROCESSING" && row.uploadedById === session.user.id && row.createdAt.getTime() + UPLOAD_WINDOW_MS >= Date.now() })), total, page, pageSize: 30,
+  return { items: items.map(row => ({ ...row, fileSize: Number(row.fileSize), canCancel: row.status === "PROCESSING" && (admin || row.uploadedById === session.user.id), canCorrect: correctionsAllowed && canCorrect(session, row), canFinalize: (!row.replacedDocumentId || correctionsAllowed) && row.status === "PROCESSING" && row.uploadedById === session.user.id && row.createdAt.getTime() + UPLOAD_WINDOW_MS >= Date.now() })), total, page, pageSize: 30,
     version: current.version, people, types, canUpload: true, storageConfigured: !!process.env.AWS_S3_DOCUMENTATION_BUCKET };
 }

@@ -113,14 +113,31 @@ test("assignment, tenant, broker and role boundaries are enforced server-side", 
   h.rows("documentationFolder")[0].correspondentId = "replacement";
   await assert.rejects(h.step("finish", { result: "APROVADO" }, correspondent), errorStatus(404));
 });
-test("submission rejects missing/inactive correspondent, empty files and in-flight uploads", async () => {
-  for (const mode of ["missing", "inactive", "empty", "processing"]) {
+test("submission rejects missing/inactive correspondent and empty files", async () => {
+  for (const mode of ["missing", "inactive", "empty"]) {
     const h = fixture(); if (mode === "missing") h.rows("documentationFolder")[0].correspondentId = null;
     if (mode === "inactive") h.rows("user")[0].isActive = false;
     if (mode === "empty") h.rows("documentationDocument").splice(0);
-    if (mode === "processing") h.rows("documentationDocument").push({ id: "processing", tenantId: "t", folderId: "f", status: "PROCESSING", createdAt: new Date() });
     await assert.rejects(h.step("submit")); assert.equal(h.rows("documentationAnalysisRound").length, 0); assert.equal(h.rows("documentationFolder")[0].version, 0);
   }
+});
+
+test("failed and expired upload attempts do not block submission or enter its snapshot", async () => {
+  const h = fixture();
+  h.rows("documentationDocument").push(
+    { id: "failed", tenantId: "t", folderId: "f", status: "PROCESSING", createdAt: new Date(), checksum: null },
+    { id: "expired", tenantId: "t", folderId: "f", status: "PROCESSING", createdAt: new Date(0), checksum: null },
+  );
+  await h.step("submit");
+  assert.deepEqual(h.rows("documentationRoundDocument").map(row => row.documentId), ["d"]);
+  assert.equal(h.rows("documentationFolder")[0].status, "AGUARDANDO_CORRESPONDENTE");
+});
+
+test("incomplete uploads alone cannot be submitted for analysis", async () => {
+  const h = fixture();
+  h.rows("documentationDocument")[0].status = "PROCESSING";
+  await assert.rejects(h.step("submit"), errorStatus(400));
+  assert.equal(h.rows("documentationAnalysisRound").length, 0);
 });
 test("issues accept general, person/type or snapshot document links and reject foreign references", async () => {
   const h = await analyzing(); for (const values of [{ personId: "foreign" }, { documentTypeId: "foreign" }, { documentId: "foreign" }, { documentId: "d", personId: "another" }]) await assert.rejects(h.step("issue", { message: "test", ...values }, correspondent), errorStatus(400));

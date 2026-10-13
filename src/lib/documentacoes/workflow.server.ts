@@ -3,7 +3,6 @@ import { prisma } from "@/lib/prisma";
 import { canManageDocumentation, type DocumentationViewer } from "./access-policy";
 import { documentScope } from "./document-access.server";
 import { DocumentationError, input, integer, text } from "./validation";
-import { UPLOAD_WINDOW_MS } from "./file-policy";
 
 const submissionStates = ["EM_MONTAGEM", "AGUARDANDO_DOCUMENTOS", "PRONTA_PARA_ANALISE", "PENDENCIA_DOCUMENTAL"];
 const waitingStates = ["AGUARDANDO_CORRESPONDENTE", "EM_REANALISE"];
@@ -29,7 +28,8 @@ export async function workflowMutation(session: DocumentationViewer, folderId: s
       if (!folder.correspondentId || !await tx.user.findFirst({ where: { id: folder.correspondentId, tenantId: session.tenant.id, role: "CORRESPONDENTE", isActive: true } })) throw new DocumentationError(400, "Atribua um correspondente ativo antes de enviar.");
       if (latest && (!latest.closedAt || folder.status !== "PENDENCIA_DOCUMENTAL")) throw new DocumentationError(409, "Rodada anterior incompatível com novo envio.");
       if (await tx.documentationPendingItem.count({ where: { tenantId: session.tenant.id, folderId, status: "OPEN" } })) throw new DocumentationError(409, "Resolva todas as pendências antes de reenviar.");
-      if (await tx.documentationDocument.count({ where: { tenantId: session.tenant.id, folderId, status: "PROCESSING", createdAt: { gt: new Date(Date.now() - UPLOAD_WINDOW_MS) } } })) throw new DocumentationError(409, "Finalize os uploads em andamento antes de enviar.");
+      // Incomplete attempts are not documentary issues. Only finalized files
+      // enter the immutable round snapshot; abandoned uploads cannot block it.
       const documents = await tx.documentationDocument.findMany({ where: { tenantId: session.tenant.id, folderId, status: "ACTIVE", checksum: { not: null } }, select: { id: true } });
       if (!documents.length) throw new DocumentationError(400, "Adicione ao menos um documento finalizado antes de enviar.");
       const round = await tx.documentationAnalysisRound.create({ data: { tenantId: session.tenant.id, folderId, sequence: (latest?.sequence ?? 0) + 1, correspondentId: folder.correspondentId, folderVersion: version + 1, sentAt: new Date() } });
