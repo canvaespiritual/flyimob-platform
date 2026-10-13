@@ -20,8 +20,6 @@ Aviso ao encontrar resposta não lida, sino persistente com contador e central p
 
 Atualização a cada 20 segundos com a página visível e ao retomar o foco/visibilidade. Não usa push do navegador ou e-mail. Eventos anteriores à instalação também aparecem como não lidos até a marcação individual. Não lidas têm paginação independente para não esconder respostas antigas. Falhas de atualização ficam visíveis.
 
-## Banco e liberação
-
 ## Acompanhamento por rodada
 
 Cada rodada tem `firstViewedAt` próprio. A abertura é confirmada por POST autenticado depois que a pasta carregou na tela visível do correspondente. Login, lista de clientes, prefetch e GET não produzem visualização. O servidor valida tenant, papel, atribuição e rodada atual. Um lock na pasta serializa abertura com envio/troca de correspondente; timestamp e evento `DOCUMENT_REVIEW_VIEWED` são persistidos na mesma transação. Não muda Folder.version nem inicia a análise. Reaberturas da mesma rodada não criam novos eventos; reanálise tem um timestamp novo, inicialmente nulo.
@@ -34,10 +32,16 @@ Migration aditiva `20261013010000_documentation_notification_reads`: índice ún
 
 Verificação local: testes de workflow (reabertura, reenvio textual, histórico, bloqueios e rollback), notificações (escopo, paginação, projeção, recibos e autenticação) e regressão de Documentações. Testes usam dados simulados, sem banco ou storage de produção.
 
-Resultado: 134 testes aprovados; Prisma validate/generate, TypeScript, lint dos arquivos alterados, build de produção e diff check aprovados. O build precisou de acesso fora do sandbox às fontes Google já usadas no projeto. Não houve QA visual autenticado, aplicação da migration, commit, push ou deploy nesta entrega.
+Na primeira etapa local: 134 testes aprovados; Prisma validate/generate, TypeScript, lint dos arquivos alterados, build de produção e diff check aprovados. O build precisou de acesso fora do sandbox às fontes Google já usadas no projeto. Naquela etapa inicial ainda não havia publicação.
 
 Atualização de 13/10/2026: o responsável autorizou implementar o acompanhamento e publicar o conjunto, incluindo migration e deploy. Regressão documental completa agora com 172 testes aprovados, incluindo concorrência/idempotência, permissões, rollback e renderização dos marcos. Build completo aprovado. Preflight confrontou em memória as identidades de conexão local/remota e o serviço `flyimob-platform` do projeto `flyimob`, ambiente production; os 38 checksums aplicados correspondem aos arquivos locais (aceitando a normalização CRLF/LF). Somente as duas migrations desta entrega estão pendentes. O script `scripts/documentacoes-release-check.mjs` não imprime variáveis e recusa outro alvo, checksum divergente, migrations desconhecidas ou falhas.
 
 A comparação prévia do schema também mostrou uma divergência anterior no nome da FK de `TrainingAccess` (`TrainingAccess_user_fkey` no banco). As migrations desta entrega não renomeiam essa FK nem alteram Treinamentos.
 
 As duas migrations foram aplicadas com sucesso pelo `prisma migrate deploy` autorizado. Confirmadas 40 migrations aplicadas, coluna `firstViewedAt` e três constraints válidas (PK e FKs compostas) nos recibos. Não houve reabertura automática de pastas nem backfill de visualizações.
+
+## Publicação verificada
+
+Commit funcional `e6577e52dc7587621521f443ddcb95bd591379a6`, enviado para main. Railway deployment `6808efd7-e63d-4edf-9fc2-55ca805e398e` confirmou SUCCESS. Smoke real em transação READ ONLY validou feed, listagem com acompanhamento e workflow. Smoke HTTP em `flyimob.com` confirmou login 200; notificações e confirmação de abertura sem sessão 401; notificações, listagem, workflow e shell do resumo autenticados 200. A sessão temporária existiu somente em memória. Nenhuma pasta real foi reaberta, marcada como lida ou visualizada em nome do correspondente.
+
+O smoke HTML valida o shell autenticado porque o conteúdo da pasta é carregado após hidratação. O componente de acompanhamento também foi verificado por renderização automatizada; esta etapa não representa QA visual interativo em navegador. O e-mail permanece para a próxima entrega, sem disparos nesta publicação.

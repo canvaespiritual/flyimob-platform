@@ -44,12 +44,14 @@ try {
       ["workflow-owner", `/api/documentacoes/pastas/${result.folderId}/workflow`, true, "GET", 200],
       ["summary-owner", `/admin/documentacoes/pastas/${result.folderId}`, true, "GET", 200],
     ]) {
+      stage = label;
       const response = await fetch(origin + path, { method, headers: authenticated ? { cookie: `${sessionCookieName}=${token}` } : {}, redirect: "manual", signal: AbortSignal.timeout(30000) });
       assert.equal(response.status, expected, label);
       if (label === "notifications-owner") { const value = await response.json(); assert.ok(Array.isArray(value.items)); }
       if (label === "folder-list-owner") { const value = await response.json(); assert.ok(value.items.every(row => Array.isArray(row.rounds))); }
       if (label === "workflow-owner") { const value = await response.json(); assert.equal(typeof value.canReopen, "boolean"); if (value.latest) assert.ok(Object.hasOwn(value.latest, "firstViewedAt")); }
-      if (label === "summary-owner") assert.ok((await response.text()).includes("Acompanhamento"));
+      // The detail UI loads after hydration. HTTP smoke verifies its authenticated shell, not browser rendering.
+      if (label === "summary-owner") assert.ok((await response.text()).includes("Carregando pasta"));
       console.log(JSON.stringify({ endpoint: label, status: response.status }));
     }
     console.log("Smoke HTTP publicado aprovado. Nenhuma pasta foi reaberta, lida ou visualizada em nome do correspondente.");
