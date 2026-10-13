@@ -2,6 +2,7 @@ import { DocumentationFolderStatus, Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { DocumentationError, date, text } from "./validation";
 import { folderListSelect } from "./folders.server";
+import { roundTrackingSelect } from "./round-tracking.server";
 
 export function pagination(params: URLSearchParams) {
   const page = Number(params.get("page") ?? 1);
@@ -41,6 +42,7 @@ export async function listFolders(tenantId: string, params: URLSearchParams) {
 export async function folderDetail(tenantId: string, id: string, params: URLSearchParams) {
   const paging = pagination(params);
   const folder = await prisma.documentationFolder.findFirst({ where: { tenantId, id }, include: {
+    rounds: { orderBy: { sequence: "desc" }, take: 1, select: roundTrackingSelect },
     people: { orderBy: { createdAt: "asc" } }, responsiblePerson: { select: { id: true, name: true } }, broker: { select: { id: true, name: true } }, correspondent: { select: { id: true, name: true, email: true, isActive: true, updatedAt: true } },
     construtora: { select: { id: true, name: true } }, empreendimento: { select: { id: true, name: true } },
   } });

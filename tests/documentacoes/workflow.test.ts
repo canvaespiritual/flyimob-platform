@@ -93,6 +93,44 @@ test("pending result needs an open issue and terminal results cannot silently dr
   await h.step("cancelIssue", { issueId }, correspondent); assert.equal(h.rows("documentationPendingItem")[0].status, "CANCELLED");
   await h.step("finish", { result: "APROVADO" }, correspondent);
 });
+
+test("rejected folder reopens for corrections and a message-only resubmission preserves the original rejection", async () => {
+  const h = await analyzing();
+  await h.step("finish", { result: "REPROVADO", observation: "Comprovante precisa de esclarecimento" }, correspondent);
+  const original = structuredClone(h.rows("documentationAnalysis")[0]);
+  await assert.rejects(h.step("reopen", { reason: "   " }), errorStatus(400));
+  await assert.rejects(h.step("reopen", { reason: "Correção" }, correspondent), errorStatus(403));
+  await h.step("reopen", { reason: "Interpretado como pendência documental" }, broker);
+  assert.equal(h.rows("documentationFolder")[0].status, "PENDENCIA_DOCUMENTAL");
+  assert.equal(h.rows("documentationAnalysisRound").length, 1);
+  assert.deepEqual(h.rows("documentationAnalysis")[0], original);
+  await assert.rejects(h.step("reopen", { reason: "Repetição" }), errorStatus(409));
+  await h.step("submit", { response: "A renda informada é mensal; documento permanece válido." }, broker);
+  assert.equal(h.rows("documentationFolder")[0].status, "EM_REANALISE");
+  assert.equal(h.rows("documentationDocument").length, 1);
+  assert.equal(h.rows("documentationAnalysisRound").length, 2);
+  const responseEvent = h.rows("documentationEvent").find(row => row.eventType === "DOCUMENT_REVIEW_RESPONSE_SENT")!;
+  assert.equal(responseEvent.roundId, h.rows("documentationAnalysisRound")[1].id);
+  assert.deepEqual(Object.keys(responseEvent.metadata as Row), ["commentId"]);
+  const view = await workflowView(correspondent, "f", new URLSearchParams(), h.db);
+  assert.equal(view.messages[0].message, "A renda informada é mensal; documento permanece válido.");
+  await h.step("start", {}, correspondent); await h.step("finish", { result: "APROVADO" }, correspondent);
+  assert.deepEqual(h.rows("documentationAnalysis").map(row => row.result), ["REPROVADO", "APROVADO"]);
+});
+
+test("reopening refuses approved/conditioned folders and stale requests; audit failures roll back the reopening", async () => {
+  for (const result of ["APROVADO", "CONDICIONADO"]) {
+    const h = await analyzing(); await h.step("finish", { result, observation: "Concluído" }, correspondent);
+    await assert.rejects(h.step("reopen", { reason: "Tentativa" }), errorStatus(409));
+  }
+  const h = await analyzing(); await h.step("finish", { result: "REPROVADO", observation: "Pendência" }, correspondent);
+  const version = h.rows("documentationFolder")[0].version;
+  await assert.rejects(h.step("reopen", { version: 0, reason: "Concorrência" }), errorStatus(409));
+  h.failEvents(); await assert.rejects(h.step("reopen", { reason: "Correção" }));
+  assert.equal(h.rows("documentationFolder")[0].status, "REPROVADO");
+  assert.equal(h.rows("documentationFolder")[0].version, version);
+  assert.equal(h.rows("documentationComment").length, 0);
+});
 test("duplicate concurrent submissions create exactly one round and a stale conflict", async () => {
   const h = fixture(); const settled = await Promise.allSettled([h.step("submit", { version: 0 }), h.step("submit", { version: 0 })]);
   assert.equal(settled.filter(value => value.status === "fulfilled").length, 1); assert.equal(h.rows("documentationAnalysisRound").length, 1); assert.equal(h.rows("documentationFolder")[0].version, 1);

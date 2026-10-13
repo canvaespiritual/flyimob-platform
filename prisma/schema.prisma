@@ -616,6 +616,7 @@ model Tenant {
 }
 
 model User {
+  documentationNotificationReads DocumentationNotificationRead[]
   trainingAccess TrainingAccess?
   @@unique([tenantId, personId])
   personId String? @unique
@@ -2476,6 +2477,7 @@ model DocumentationAnalysisRound {
   correspondentId String
   folderVersion Int
   sentAt DateTime
+  firstViewedAt DateTime?
   closedAt DateTime?
   createdAt DateTime @default(now())
   folder DocumentationFolder @relation(fields: [tenantId, folderId], references: [tenantId, id], onDelete: Restrict)
@@ -2607,11 +2609,27 @@ model DocumentationEvent {
   folder DocumentationFolder @relation(fields: [tenantId, folderId], references: [tenantId, id], onDelete: Restrict)
   actor User? @relation(fields: [tenantId, actorId], references: [tenantId, id], onDelete: Restrict)
   round DocumentationAnalysisRound? @relation(fields: [tenantId, folderId, roundId], references: [tenantId, folderId, id], onDelete: Restrict)
+  notificationReads DocumentationNotificationRead[]
 
+  @@unique([tenantId, folderId, id])
   @@index([tenantId, folderId, createdAt])
   @@index([tenantId, folderId, roundId])
   @@index([tenantId, actorId])
   @@index([tenantId, eventType, createdAt])
+}
+
+// Per-user receipts leave the immutable source event untouched.
+model DocumentationNotificationRead {
+  tenantId String
+  folderId String
+  eventId String
+  userId String
+  readAt DateTime @default(now())
+  event DocumentationEvent @relation(fields: [tenantId, folderId, eventId], references: [tenantId, folderId, id], onDelete: Restrict, map: "DocumentationNotificationRead_event_fkey")
+  user User @relation(fields: [tenantId, userId], references: [tenantId, id], onDelete: Restrict, map: "DocumentationNotificationRead_user_fkey")
+
+  @@id([tenantId, userId, eventId])
+  @@index([tenantId, folderId, eventId])
 }
 
 // Internal economics are independent from the fungible physical Meta balance.

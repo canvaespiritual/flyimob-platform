@@ -12,6 +12,7 @@ export default function FolderDocuments({ id }: { id: string }) {
   const search = useSearchParams();
   const [data, setData] = useState<Detail>(); const [error, setError] = useState("");
   const [revision, setRevision] = useState(0); const [historyPage, setHistoryPage] = useState(1);
+  const [trackingError, setTrackingError] = useState("");
   const [tab, setTab] = useState(search.get("tab") === "pendencias" ? "pendencias" : search.get("tab") === "historico" ? "historico" : "documentos");
   const [correction, setCorrection] = useState<{ id: string; personId: string | null; documentTypeId: string | null }>();
   useEffect(() => {
@@ -19,11 +20,27 @@ export default function FolderDocuments({ id }: { id: string }) {
     fetch(`/api/documentacoes/correspondente/pastas/${id}?page=${historyPage}`, { cache: "no-store" }).then(async response => { const value = await response.json(); if (!response.ok) throw new Error(value.error ?? "Não foi possível abrir os documentos."); if (live) { setData(value); setError(""); } }).catch(error => { if (live) setError(error.message); });
     return () => { live = false; };
   }, [id, revision, historyPage]);
+  const loadedRoundId = data?.folder.rounds[0]?.id;
+  useEffect(() => {
+    if (!loadedRoundId) return;
+    let live = true; let sent = false;
+    const record = () => {
+      if (document.visibilityState === "hidden" || sent) return;
+      sent = true;
+      void fetch(`/api/documentacoes/correspondente/pastas/${id}/visualizacao`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ roundId: loadedRoundId }) }).then(async response => {
+        if (!response.ok) throw new Error("Não foi possível confirmar a abertura da pasta. Atualize para tentar novamente.");
+        if (live) setTrackingError("");
+      }).catch(error => { if (live) setTrackingError(error.message); });
+    };
+    record(); document.addEventListener("visibilitychange", record);
+    return () => { live = false; document.removeEventListener("visibilitychange", record); };
+  }, [id, loadedRoundId, revision]);
   const folder = data?.folder; const holder = folder?.people.find(person => person.relationship === "TITULAR"); const status = correspondentStatus(folder?.status ?? "");
   const refresh = () => setRevision(value => value + 1);
   return <main className="mx-auto max-w-6xl space-y-5 px-4 py-6 sm:px-6">
     <Link className="inline-flex text-sm font-medium text-blue-700 hover:underline" href="/correspondente">← Voltar para clientes</Link>
     {error && <p role="alert" className="rounded-lg border bg-amber-50 p-3 text-sm">{error}</p>}
+    {trackingError && <p role="alert" className="rounded-lg border bg-amber-50 p-3 text-sm">{trackingError} <button className="underline" onClick={refresh}>Atualizar</button></p>}
     {folder ? <>
       <header className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6"><div className="flex flex-wrap items-center justify-between gap-3"><h1 className="break-words text-2xl font-bold">{holder?.name ?? "Cliente"}</h1><span className={`rounded-full border px-3 py-1.5 text-sm font-semibold ${status.tone}`}>{status.title}</span></div><p className="mt-3 text-sm text-slate-600">CPF: {holder?.cpfDisplay ?? "Não informado"} · Responsável comercial: {folder.broker?.name ?? "Responsável legado"}</p><p className="mt-2 break-words text-sm text-slate-600">E-mail: {holder?.email ?? "Não informado"} · Telefone: {holder?.phone ?? "Não informado"}</p>{folder.correspondentMessage && <div className="mt-3 rounded-lg border border-blue-100 bg-blue-50 p-3 text-sm"><h2 className="font-semibold">Mensagem da operação</h2><p className="mt-1 whitespace-pre-wrap break-words">{folder.correspondentMessage}</p></div>}</header>
       <nav className="flex gap-2 rounded-xl border border-slate-200 bg-white p-2" aria-label="Área do cliente" role="tablist">{[["documentos", "Documentos"], ["pendencias", "Análise e pendências"], ["historico", "Histórico"]].map(([key, title]) => <button key={key} role="tab" aria-selected={tab === key} aria-controls={"cliente-" + key} className={`flex-1 rounded-lg px-2 py-3 text-sm font-semibold ${tab === key ? "bg-blue-700 text-white" : "text-slate-600 hover:bg-slate-50"}`} onClick={() => setTab(key)}>{title}</button>)}</nav>

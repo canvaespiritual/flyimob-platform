@@ -3,11 +3,12 @@ import { prisma } from "@/lib/prisma";
 import { canManageDocumentation, type DocumentationViewer } from "./access-policy";
 import { documentScope } from "./document-access.server";
 import { DocumentationError, input, integer, text } from "./validation";
+import { roundTrackingSelect } from "./round-tracking.server";
 
 const submissionStates = ["EM_MONTAGEM", "AGUARDANDO_DOCUMENTOS", "PRONTA_PARA_ANALISE", "PENDENCIA_DOCUMENTAL"];
 const waitingStates = ["AGUARDANDO_CORRESPONDENTE", "EM_REANALISE"];
 const results: DocumentationAnalysisResult[] = ["PENDENCIA_DOCUMENTAL", "APROVADO", "CONDICIONADO", "REPROVADO"];
-export type WorkflowAction = "submit" | "start" | "issue" | "editIssue" | "cancelIssue" | "resolve" | "note" | "finish";
+export type WorkflowAction = "submit" | "reopen" | "start" | "issue" | "editIssue" | "cancelIssue" | "resolve" | "note" | "finish";
 function responsible(session: DocumentationViewer) { return canManageDocumentation(session) || session.user.role === "BROKER"; }
 async function event(tx: Prisma.TransactionClient, session: DocumentationViewer, folderId: string, roundId: string, eventType: string, metadata: Prisma.InputJsonObject = {}) {
   await tx.documentationEvent.create({ data: { tenantId: session.tenant.id, folderId, roundId, eventType, actorId: session.user.id, actorRole: session.user.role, metadata } });
@@ -27,6 +28,7 @@ export async function workflowMutation(session: DocumentationViewer, folderId: s
       if (!submissionStates.includes(folder.status)) throw new DocumentationError(409, "Este estado não permite envio.");
       if (!folder.correspondentId || !await tx.user.findFirst({ where: { id: folder.correspondentId, tenantId: session.tenant.id, role: "CORRESPONDENTE", isActive: true } })) throw new DocumentationError(400, "Atribua um correspondente ativo antes de enviar.");
       if (latest && (!latest.closedAt || folder.status !== "PENDENCIA_DOCUMENTAL")) throw new DocumentationError(409, "Rodada anterior incompatível com novo envio.");
+      const response = text(body.response, "Resposta ao correspondente", false, 10000);
       if (await tx.documentationPendingItem.count({ where: { tenantId: session.tenant.id, folderId, status: "OPEN" } })) throw new DocumentationError(409, "Resolva todas as pendências antes de reenviar.");
       // Incomplete attempts are not documentary issues. Only finalized files
       // enter the immutable round snapshot; abandoned uploads cannot block it.
@@ -35,11 +37,24 @@ export async function workflowMutation(session: DocumentationViewer, folderId: s
       const round = await tx.documentationAnalysisRound.create({ data: { tenantId: session.tenant.id, folderId, sequence: (latest?.sequence ?? 0) + 1, correspondentId: folder.correspondentId, folderVersion: version + 1, sentAt: new Date() } });
       await tx.documentationRoundDocument.createMany({ data: documents.map(document => ({ tenantId: session.tenant.id, folderId, roundId: round.id, documentId: document.id })) });
       await tx.documentationFolder.update({ where: { id: folderId }, data: { status: latest ? "EM_REANALISE" : "AGUARDANDO_CORRESPONDENTE" } });
+      if (response) {
+        const comment = await tx.documentationComment.create({ data: { tenantId: session.tenant.id, folderId, authorId: session.user.id, visibility: "SHARED", message: response } });
+        await event(tx, session, folderId, round.id, "DOCUMENT_REVIEW_RESPONSE_SENT", { commentId: comment.id });
+      }
       await event(tx, session, folderId, round.id, latest ? "DOCUMENT_REVIEW_RESUBMITTED" : "DOCUMENT_REVIEW_SUBMITTED", { sequence: round.sequence });
       return { version: version + 1, roundId: round.id };
     }
     if (!latest || text(body.roundId, "Rodada", true) !== latest.id) throw new DocumentationError(409, "Esta não é a rodada atual.");
     const round = latest;
+    if (action === "reopen") {
+      if (!responsible(session)) throw new DocumentationError(403, "Somente o responsável pode reabrir a pasta.");
+      if (folder.status !== "REPROVADO" || !round.closedAt) throw new DocumentationError(409, "Somente uma pasta reprovada e concluída pode ser reaberta.");
+      const message = text(body.reason, "Motivo da reabertura", true, 10000)!;
+      const comment = await tx.documentationComment.create({ data: { tenantId: session.tenant.id, folderId, authorId: session.user.id, visibility: "SHARED", message } });
+      await tx.documentationFolder.update({ where: { id: folderId }, data: { status: "PENDENCIA_DOCUMENTAL" } });
+      await event(tx, session, folderId, round.id, "DOCUMENT_REVIEW_REOPENED", { commentId: comment.id });
+      return { version: version + 1 };
+    }
     if (action === "resolve") {
       if (!responsible(session)) throw new DocumentationError(403, "Somente o responsável pode resolver pendências.");
       if (folder.status !== "PENDENCIA_DOCUMENTAL" || !round.closedAt) throw new DocumentationError(409, "Resolução indisponível neste estado.");
@@ -112,7 +127,7 @@ export async function workflowView(session: DocumentationViewer, folderId: strin
   const page = Number(params.get("page") ?? 1); const issuePage = Number(params.get("issuePage") ?? 1);
   if (![page, issuePage].every(value => Number.isSafeInteger(value) && value > 0 && value <= 100000)) throw new DocumentationError(400, "Página inválida.");
   const where = { tenantId: session.tenant.id, folderId };
-  const latest = await db.documentationAnalysisRound.findFirst({ where, orderBy: { sequence: "desc" }, select: { id: true, sequence: true, closedAt: true, correspondentId: true } });
+  const latest = await db.documentationAnalysisRound.findFirst({ where, orderBy: { sequence: "desc" }, select: roundTrackingSelect });
   const selectedId = text(params.get("roundId"), "Rodada") ?? latest?.id;
   if (selectedId && !await db.documentationAnalysisRound.count({ where: { ...where, id: selectedId } })) throw new DocumentationError(404, "Rodada não encontrada.");
   const [rounds, total, issues, issueTotal, documents, types, openIssues] = await Promise.all([
@@ -128,5 +143,9 @@ export async function workflowView(session: DocumentationViewer, folderId: strin
   const commentId = (noteEvent?.metadata as { commentId?: string } | null)?.commentId;
   const note = commentId ? await db.documentationComment.findFirst({ where: { ...where, id: commentId, visibility: "SHARED" }, select: { message: true } }) : null;
   const analyst = session.user.role === "CORRESPONDENTE" && latest?.correspondentId === session.user.id && folder.correspondentId === session.user.id;
-  return { folder, latest, rounds, total, page, selectedId, issues, issueTotal, issuePage, documents, types, openIssues, note: note?.message ?? "", canSubmit: responsible(session) && submissionStates.includes(folder.status), canResolve: responsible(session) && folder.status === "PENDENCIA_DOCUMENTAL", canStart: analyst && waitingStates.includes(folder.status) && !latest?.closedAt, canAnalyze: analyst && folder.status === "EM_ANALISE" && !latest?.closedAt };
+  const messageEvents = selectedId ? await db.documentationEvent.findMany({ where: { ...where, roundId: selectedId, eventType: { in: ["DOCUMENT_REVIEW_RESPONSE_SENT", "DOCUMENT_REVIEW_REOPENED", "DOCUMENT_REVIEW_NOTE_SAVED"] } }, orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: 50, select: { id: true, eventType: true, metadata: true, createdAt: true, actor: { select: { name: true } } } }) : [];
+  const commentIds = messageEvents.flatMap(item => { const id = (item.metadata as { commentId?: string } | null)?.commentId; return typeof id === "string" ? [id] : []; });
+  const comments = commentIds.length ? await db.documentationComment.findMany({ where: { ...where, id: { in: commentIds }, visibility: "SHARED" }, select: { id: true, message: true } }) : [];
+  const messages = messageEvents.flatMap(item => { const comment = comments.find(comment => comment.id === (item.metadata as { commentId?: string } | null)?.commentId); return comment ? [{ id: item.id, eventType: item.eventType, createdAt: item.createdAt, author: item.actor?.name ?? "Responsável", message: comment.message }] : []; });
+  return { folder, latest, rounds, total, page, selectedId, issues, issueTotal, issuePage, documents, types, openIssues, messages, note: note?.message ?? "", canReopen: responsible(session) && folder.status === "REPROVADO" && !!latest?.closedAt, canSubmit: responsible(session) && submissionStates.includes(folder.status), canResolve: responsible(session) && folder.status === "PENDENCIA_DOCUMENTAL", canStart: analyst && waitingStates.includes(folder.status) && !latest?.closedAt, canAnalyze: analyst && folder.status === "EM_ANALISE" && !latest?.closedAt };
 }

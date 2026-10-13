@@ -1,5 +1,7 @@
 # Workflow documental V1
 
+Atualização local posterior: [reabertura de reprovações, resposta textual e notificações](./reanalise-notificacoes.md). As restrições de reabertura/notificações descritas abaixo registram a V1 original; a atualização depende da migration e da publicação indicadas nesse documento.
+
 ## Inspeção e reutilização
 
 Reutilizados os 11 modelos existentes de Documentações, usuários/tenant, Folder.version, atribuição brokerId/correspondentId, eventos imutáveis, snapshots DocumentationRoundDocument/DocumentationAnalysisDocument, DocumentationAnalysisRound, DocumentationAnalysis, DocumentationPendingItem e comentários SHARED. O storage aprovado e seu cliente não foram redesenhados.

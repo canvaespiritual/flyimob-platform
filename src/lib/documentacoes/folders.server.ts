@@ -6,10 +6,12 @@ import { DocumentationError, input, text, integer, personInput, editableStatus, 
 
 import { canActAsSalesResponsible } from "@/lib/team/policy";
 import { personSelect } from "@/lib/team/select.server";
+import { roundTrackingSelect } from "./round-tracking.server";
 
 type DB = Prisma.TransactionClient;
 const editable = ["EM_MONTAGEM", "AGUARDANDO_DOCUMENTOS", "PENDENCIA_DOCUMENTAL"] as DocumentationFolderStatus[];
 export const folderListSelect = {
+  rounds: { orderBy: { sequence: "desc" }, take: 1, select: roundTrackingSelect },
   id: true, status: true, version: true, createdAt: true, updatedAt: true,
   people: { where: { relationship: "TITULAR" }, select: { name: true, cpf: true }, take: 1 },
   responsiblePerson: { select: { id: true, name: true } },

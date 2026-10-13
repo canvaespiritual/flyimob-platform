@@ -10,10 +10,10 @@ export function correspondentStatus(status: string) {
   const values: Record<string, { title: string; action: string; tone: string }> = {
     AGUARDANDO_CORRESPONDENTE: { title: "Nova análise", action: "Analisar", tone: "border-amber-200 bg-amber-50 text-amber-900" },
     EM_ANALISE: { title: "Em análise", action: "Continuar análise", tone: "border-blue-200 bg-blue-50 text-blue-900" },
-    EM_REANALISE: { title: "Correção recebida", action: "Reanalisar", tone: "border-red-200 bg-red-50 text-red-900" },
+    EM_REANALISE: { title: "Correção recebida", action: "Reanalisar", tone: "border-blue-200 bg-blue-50 text-blue-900" },
     PENDENCIA_DOCUMENTAL: { title: "Aguardando correções", action: "Consultar pendências", tone: "border-orange-200 bg-orange-50 text-orange-900" },
     APROVADO: { title: "Documentação aprovada", action: "Consultar análise", tone: "border-emerald-200 bg-emerald-50 text-emerald-900" },
-    CONDICIONADO: { title: "Aprovada com condições", action: "Consultar análise", tone: "border-emerald-200 bg-emerald-50 text-emerald-900" },
+    CONDICIONADO: { title: "Aprovada com condições", action: "Consultar análise", tone: "border-amber-200 bg-amber-50 text-amber-900" },
     REPROVADO: { title: "Documentação reprovada", action: "Consultar análise", tone: "border-red-200 bg-red-50 text-red-900" },
   };
   return values[status] ?? { title: "Em preparação", action: "Consultar documentos", tone: "border-slate-200 bg-slate-50 text-slate-700" };
@@ -30,6 +30,9 @@ export function documentationDate(value: Date | string) {
   return new Date(value).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", dateStyle: "short", timeStyle: "short" });
 }
 export const documentationEventLabels: Record<string, string> = {
+  DOCUMENT_REVIEW_VIEWED: "Correspondente abriu a pasta",
+  DOCUMENT_REVIEW_REOPENED: "Pasta reaberta para correções",
+  DOCUMENT_REVIEW_RESPONSE_SENT: "Resposta enviada ao correspondente",
   CORRESPONDENT_MESSAGE_UPDATED: "Mensagem para o correspondente atualizada",
   FOLDER_CREATED: "Cliente cadastrado para documentação", FOLDER_UPDATED: "Dados do cliente atualizados",
   BROKER_ASSIGNED: "Responsável comercial definido", CORRESPONDENT_ASSIGNED: "Correspondente responsável definido", CORRESPONDENT_CHANGED: "Correspondente responsável alterado",
