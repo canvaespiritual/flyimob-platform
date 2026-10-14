@@ -29,16 +29,19 @@ export async function POST(req: Request) {
     const s = auth.session;
     const tenant = s.tenant;
 
-    await prisma.comparativo.update({
-      where: { id },
+    const updated = await prisma.comparativo.updateMany({
+      where: { id, tenantId: tenant.id },
       data: {
         titulo,
         clienteNome,
         showGeral: Boolean(body?.showGeral),
         showEntrada: Boolean(body?.showEntrada),
         showFinanciamento: Boolean(body?.showFinanciamento),
+        publicadoEm: null,
+        revisao: { increment: 1 },
       },
     });
+    if (!updated.count) return NextResponse.json({ ok: false, error: "Comparativo não encontrado." }, { status: 404 });
 
     return NextResponse.json({ ok: true });
   } catch (err) {

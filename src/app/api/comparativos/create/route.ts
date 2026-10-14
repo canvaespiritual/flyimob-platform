@@ -1,10 +1,11 @@
 import { getPermissionApiSession } from "@/lib/api-access.server";
 import { NextResponse } from "next/server";
 import { prisma } from "../../../../lib/prisma";
+import { randomBytes } from "node:crypto";
 
 function makeSlug(): string {
   // slug curto e seguro (sem lib externa)
-  const rand = Math.random().toString(36).slice(2, 8);
+  const rand = randomBytes(16).toString("hex");
   const time = Date.now().toString(36).slice(-4);
   return `c-${time}${rand}`.toLowerCase();
 }
@@ -41,6 +42,7 @@ export async function POST(req: Request) {
         titulo,
         clienteNome,
         slugPublico,
+        modoDirecionamento: body?.modoDirecionamento === true,
         // defaults dos blocos já são true no schema
       },
       select: {

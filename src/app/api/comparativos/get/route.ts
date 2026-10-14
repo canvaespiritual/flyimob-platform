@@ -22,6 +22,7 @@ export async function GET(req: Request) {
         items: {
           orderBy: { ordem: "asc" },
           include: {
+            anexos: { select: { id: true, titulo: true, nomeOriginal: true, escopo: true } },
             tipologia: {
               include: {
                 empreendimento: {
@@ -33,6 +34,7 @@ export async function GET(req: Request) {
             },
           },
         },
+        anexos: { where: { itemId: null }, select: { id: true, titulo: true, nomeOriginal: true, escopo: true } },
       },
     });
 

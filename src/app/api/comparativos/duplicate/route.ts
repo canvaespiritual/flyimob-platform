@@ -1,9 +1,11 @@
+import { randomBytes } from "node:crypto";
+import { Prisma } from "@prisma/client";
 import { getPermissionApiSession } from "@/lib/api-access.server";
 import { NextResponse } from "next/server";
 import { prisma } from "../../../../lib/prisma";
 
 function makeSlug(): string {
-  const rand = Math.random().toString(36).slice(2, 8);
+  const rand = randomBytes(16).toString("hex");
   const time = Date.now().toString(36).slice(-4);
   return `c-${time}${rand}`.toLowerCase();
 }
@@ -43,6 +45,7 @@ export async function POST(req: Request) {
           titulo: `${original.titulo} (cópia)`,
           clienteNome: original.clienteNome,
           slugPublico,
+          modoDirecionamento: original.modoDirecionamento,
           showGeral: original.showGeral,
           showEntrada: original.showEntrada,
           showFinanciamento: original.showFinanciamento,
@@ -56,6 +59,8 @@ export async function POST(req: Request) {
             comparativoId: novo.id,
             tipologiaId: it.tipologiaId,
             ordem: it.ordem,
+            planoRascunho: it.planoPagamento ?? Prisma.DbNull,
+            estadoExtracao: original.modoDirecionamento ? "REVISAR" : "MANUAL",
 
             valorTotal: it.valorTotal,
             entradaTotal: it.entradaTotal,

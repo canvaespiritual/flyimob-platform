@@ -5,6 +5,9 @@ import { useParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
 type ComparativoFinal = {
+  modoDirecionamento: boolean;
+  publicadoEm: string | null;
+  revisao: number;
   id: string;
   slugPublico: string;
   titulo: string;
@@ -26,11 +29,24 @@ const DEFAULT_CONFIG = {
     financiamento: true,
     observacoes: true,
     mapa: true,      // final do comparativo
+    credito: true,
+    proximosPassos: true,
     capa: true,      // usar imagem de capa se existir
   },
 
   // toggles por CAMPO (checklist completo)
   fields: {
+    unidadeProposta: true,
+    plano_sinal: true,
+    plano_mensais_obra: true,
+    plano_intermediarias: true,
+    plano_mensais_pos_chaves: true,
+    plano_mensais_sem_fase: true,
+    plano_outros: true,
+    descontosProposta: true,
+    validadeProposta: true,
+    extrasProposta: true,
+    anexoProposta: true,
     // ====== GERAL (puxado do cadastro) ======
     nomeEmpreendimento: true,
     construtora: true,
@@ -128,12 +144,12 @@ export default function FinalizarComparativoPage() {
     const res = await fetch("/api/comparativos/finalize/save", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id: cmp.id, configExibicao: config }),
+      body: JSON.stringify({ id: cmp.id, revisao: cmp.revisao, configExibicao: config }),
     });
     const json = await res.json().catch(() => ({}));
     setSaving(false);
     if (!json.ok) alert(json.error || "Erro ao salvar configurações.");
-    else alert("Configurações salvas!");
+    else { await load(); alert(cmp.modoDirecionamento ? "Apresentação finalizada! O link está pronto para a reunião." : "Configurações salvas!"); }
   }
 
   function toggleBlock(key: string) {
@@ -178,7 +194,7 @@ export default function FinalizarComparativoPage() {
           </button>
 
           <a
-            href={publicUrl}
+            href={cmp.modoDirecionamento && !cmp.publicadoEm ? `${publicUrl}?preview=1` : publicUrl}
             target="_blank"
             rel="noreferrer"
             className="border rounded px-3 py-2 text-sm bg-black text-white"
@@ -198,6 +214,7 @@ export default function FinalizarComparativoPage() {
       {/* BLOCO: CONFIG DE BLOCOS */}
       <div className="border rounded-lg p-4 bg-white space-y-3">
         <h2 className="font-medium">Blocos do comparativo final</h2>
+        {cmp.modoDirecionamento && <div className="flex gap-4 text-sm"><label><input type="checkbox" checked={config.blocks.credito} onChange={() => toggleBlock("credito")} /> Crédito e anexos gerais</label><label><input type="checkbox" checked={config.blocks.proximosPassos} onChange={() => toggleBlock("proximosPassos")} /> Direcionamento e próximos passos</label></div>}
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
           <label className="flex items-center gap-2">
@@ -232,7 +249,7 @@ export default function FinalizarComparativoPage() {
             disabled={saving}
             className="bg-black text-white rounded px-4 py-2"
           >
-            {saving ? "Salvando..." : "Salvar configurações"}
+            {saving ? "Salvando..." : (cmp.modoDirecionamento ? "Finalizar apresentação" : "Salvar configurações")}
           </button>
         </div>
       </div>
@@ -250,12 +267,12 @@ export default function FinalizarComparativoPage() {
           <Field k="bairro" label="Bairro" v={config.fields.bairro} onToggle={toggleField} />
           <Field k="cidade" label="Cidade" v={config.fields.cidade} onToggle={toggleField} />
           <Field k="enderecoCompleto" label="Endereço completo" v={config.fields.enderecoCompleto} onToggle={toggleField} />
-          <Field
+          {!cmp.modoDirecionamento && <Field
   k="precoM2"
   label="Preço/m² (calculado)"
   v={config.fields.precoM2}
   onToggle={toggleField}
-/>
+/>}
 
           <Field k="dataEntregaMeses" label="Entrega (em meses)" v={config.fields.dataEntregaMeses} onToggle={toggleField} />
           <Field k="tipologiaNome" label="Tipologia (nome)" v={config.fields.tipologiaNome} onToggle={toggleField} />
@@ -270,7 +287,7 @@ export default function FinalizarComparativoPage() {
           <Field k="valorAvaliacaoBanco" label="Valor de avaliação" v={config.fields.valorAvaliacaoBanco} onToggle={toggleField} />
         </Section>
 
-        <Section title="Entrada / Condições (atendimento)">
+        {cmp.modoDirecionamento ? <Section title="Plano extraído e revisado">{Object.entries({ unidadeProposta: "Unidade, vagas e varanda da proposta", valorTotal: "Preço da proposta", entradaTotal: "Total de entrada informado no documento", plano_sinal: "Sinal", plano_mensais_obra: "Mensais durante a obra", plano_intermediarias: "Intermediárias", plano_mensais_pos_chaves: "Mensais após as chaves", plano_mensais_sem_fase: "Mensais sem fase informada", plano_outros: "Outros pagamentos", descontosProposta: "Descontos e benefícios condicionais", validadeProposta: "Validade", extrasProposta: "Linhas adicionais", anexoProposta: "Anexo original" }).map(([k, label]) => <Field key={k} k={k} label={label} v={config.fields[k]} onToggle={toggleField} />)}</Section> : <Section title="Entrada / Condições (atendimento)">
           <Field k="valorTotal" label="Valor total" v={config.fields.valorTotal} onToggle={toggleField} />
           <Field k="entradaTotal" label="Entrada total" v={config.fields.entradaTotal} onToggle={toggleField} />
           <Field k="sinalEntrada" label="Sinal de entrada" v={config.fields.sinalEntrada} onToggle={toggleField} />
@@ -282,6 +299,7 @@ export default function FinalizarComparativoPage() {
           <Field k="parcelasAnuais" label="Parcelas anuais" v={config.fields.parcelasAnuais} onToggle={toggleField} />
         </Section>
 
+        }
         <Section title="Benefícios e subsídios">
           <Field k="fgts" label="FGTS" v={config.fields.fgts} onToggle={toggleField} />
           <Field k="subsidioFederal" label="Subsídio federal" v={config.fields.subsidioFederal} onToggle={toggleField} />
@@ -307,7 +325,7 @@ export default function FinalizarComparativoPage() {
             disabled={saving}
             className="bg-black text-white rounded px-4 py-2"
           >
-            {saving ? "Salvando..." : "Salvar configurações"}
+            {saving ? "Salvando..." : (cmp.modoDirecionamento ? "Finalizar apresentação" : "Salvar configurações")}
           </button>
         </div>
       </div>
@@ -319,7 +337,7 @@ export default function FinalizarComparativoPage() {
           Itens no comparativo: <b>{cmp.items.length}</b> • Link público: <span className="font-mono text-xs">{publicUrl}</span>
         </p>
         <p className="text-xs text-gray-500 mt-2">
-          Próximo passo: criar a página pública <b>/c/[slug]</b> e renderizar usando este configExibicao.
+          {cmp.modoDirecionamento && !cmp.publicadoEm ? "Confira a prévia e finalize para disponibilizar o link da reunião." : "Use o link para apresentar e compartilhar o comparativo."}
         </p>
       </div>
     </div>

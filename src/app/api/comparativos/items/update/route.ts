@@ -33,9 +33,10 @@ export async function POST(req: Request) {
     }
 
     const item = await prisma.comparativoItem.findFirst({
-      where: { id: itemId, comparativo: { tenantId: auth.session.tenant.id } }, select: { id: true },
+      where: { id: itemId, comparativo: { tenantId: auth.session.tenant.id } }, select: { id: true, comparativo: { select: { modoDirecionamento: true } } },
     });
     if (!item) return NextResponse.json({ ok: false, error: "Item não encontrado." }, { status: 404 });
+    if (item.comparativo.modoDirecionamento) return NextResponse.json({ ok: false, error: "Use a revisão do plano para alterar esta opção." }, { status: 409 });
 
     await prisma.comparativoItem.update({
       where: { id: itemId },

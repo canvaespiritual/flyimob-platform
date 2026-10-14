@@ -898,6 +898,12 @@ model Comparativo {
 
   configExibicao Json?
 
+  modoDirecionamento Boolean @default(false)
+  resumoCredito      Json?
+  publicadoEm        DateTime?
+  revisao            Int @default(0)
+  anexos             ComparativoAnexo[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -912,6 +918,15 @@ model ComparativoItem {
   comparativoId String
   tipologiaId   String
   ordem         Int
+
+  planoPagamento Json?
+  planoRascunho  Json?
+  extracaoOriginal Json?
+  estadoExtracao String @default("MANUAL")
+  extracaoToken String?
+  extracaoIniciadaEm DateTime?
+  revisao Int @default(0)
+  anexos ComparativoAnexo[]
 
   // =========================
   // VALORES PRINCIPAIS
@@ -960,6 +975,25 @@ model ComparativoItem {
 
   @@index([comparativoId])
   @@index([tipologiaId])
+}
+
+model ComparativoAnexo {
+  id String @id @default(cuid())
+  comparativoId String
+  itemId String?
+  escopo String
+  titulo String
+  nomeOriginal String
+  mimeType String
+  fileSize BigInt
+  storageKey String @unique
+  checksum String
+  uploadedById String
+  createdAt DateTime @default(now())
+  comparativo Comparativo @relation(fields: [comparativoId], references: [id], onDelete: Cascade)
+  item ComparativoItem? @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  @@unique([comparativoId, escopo])
+  @@index([itemId])
 }
 
 model CRMLead {

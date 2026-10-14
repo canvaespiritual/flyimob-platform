@@ -24,6 +24,9 @@ export async function GET(req: Request) {
         showEntrada: true,
         showFinanciamento: true,
         configExibicao: true,
+        modoDirecionamento: true,
+        publicadoEm: true,
+        revisao: true,
         items: {
           orderBy: { ordem: "asc" },
           include: {

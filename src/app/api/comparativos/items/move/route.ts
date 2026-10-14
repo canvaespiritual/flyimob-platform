@@ -31,6 +31,7 @@ export async function POST(req: Request) {
 
     // troca ordens (transação)
     await prisma.$transaction([
+      prisma.comparativo.update({ where: { id: item.comparativoId }, data: { publicadoEm: null, revisao: { increment: 1 } } }),
       prisma.comparativoItem.update({ where: { id: itemId }, data: { ordem: swapWith.ordem } }),
       prisma.comparativoItem.update({ where: { id: swapWith.id }, data: { ordem: item.ordem } }),
     ]);

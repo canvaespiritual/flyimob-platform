@@ -21,6 +21,7 @@ export default function AdminComparativosPage() {
 
   const [titulo, setTitulo] = useState("");
   const [clienteNome, setClienteNome] = useState("");
+  const [modoDirecionamento, setModoDirecionamento] = useState(true);
   const [creating, setCreating] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 const [deleteCheck, setDeleteCheck] = useState(false);
@@ -45,7 +46,7 @@ const [deleting, setDeleting] = useState(false);
     const res = await fetch("/api/comparativos/create", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ titulo, clienteNome }),
+      body: JSON.stringify({ titulo, clienteNome, modoDirecionamento }),
     });
 
     const json = await res.json();
@@ -56,6 +57,7 @@ const [deleting, setDeleting] = useState(false);
       return;
     }
 
+    if (modoDirecionamento) { window.location.href = `/admin/comparativos/${json.comparativo.id}`; return; }
     setTitulo("");
     setClienteNome("");
     await load();
@@ -119,6 +121,7 @@ async function deleteComparativo(id: string) {
       {/* Criar novo */}
       <div className="border rounded-lg p-4 space-y-3 bg-white">
         <h2 className="font-medium">Novo comparativo</h2>
+        <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={modoDirecionamento} onChange={e => setModoDirecionamento(e.target.checked)} />Direcionamento com IA e anexos (avulso, sem vínculo obrigatório com CRM)</label>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <input

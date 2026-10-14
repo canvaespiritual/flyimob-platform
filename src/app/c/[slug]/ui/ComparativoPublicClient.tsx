@@ -1,5 +1,6 @@
 "use client";
 
+import { PlanoApresentacao, CreditoApresentacao } from "../../PlanoApresentacao";
 import { useEffect, useMemo, useState } from "react";
 
 function money(n: number | null | undefined) {
@@ -89,12 +90,12 @@ export default function ComparativoPublicClient({ comparativo }: { comparativo: 
       const t = it.tipologia;
       const emp = t?.empreendimento;
 
-      const valorBase = it.valorTotal ?? t?.precoInicial ?? null;
+      const valorBase = comparativo.modoDirecionamento ? it.planoPagamento?.valorTotal ?? null : it.valorTotal ?? t?.precoInicial ?? null;
       const area = t?.areaPrivativa ?? t?.areaTerreno ?? null;
-      const precoM2 = valorBase && area ? valorBase / area : null;
+      const precoM2 = !comparativo.modoDirecionamento && valorBase && area ? valorBase / area : null;
       const entregaMeses = monthsUntil(emp?.dataEntrega);
 
-      const saldoSug = valorBase && it.entradaTotal ? valorBase - it.entradaTotal : null;
+      const saldoSug = !comparativo.modoDirecionamento && valorBase && it.entradaTotal ? valorBase - it.entradaTotal : null;
 
       const fotos = emp?.fotos ?? [];
       const urls = fotos.map((f: any) => f.urlFull).filter(Boolean);
@@ -108,7 +109,7 @@ export default function ComparativoPublicClient({ comparativo }: { comparativo: 
 
   function shouldShow(key: string) {
   // campos críticos sempre aparecem
-  if (["entradaTotal", "valorTotal"].includes(key)) return true;
+  if (!comparativo.modoDirecionamento && ["entradaTotal", "valorTotal"].includes(key)) return true;
 
   if (!config?.fields) return true;
   return !!fields[key];
@@ -137,7 +138,7 @@ export default function ComparativoPublicClient({ comparativo }: { comparativo: 
       hectares: { label: "Hectares", value: t?.hectares ?? "-" },
       alqueires: { label: "Alqueires", value: t?.alqueires ?? "-" },
       disponiveis: { label: "Disponíveis", value: t?.disponiveis ?? "-" },
-      valorAvaliacaoBanco: { label: "Avaliação", value: t?.valorAvaliacaoBanco ? money(t.valorAvaliacaoBanco) : "-" },
+      valorAvaliacaoBanco: { label: "Avaliação", value: comparativo.modoDirecionamento ? money(it?.planoPagamento?.valorAvaliacao) : t?.valorAvaliacaoBanco ? money(t.valorAvaliacaoBanco) : "-" },
 
       // ENTRADA
       valorTotal: { label: "Valor total", value: money(valorBase) },
@@ -178,7 +179,7 @@ export default function ComparativoPublicClient({ comparativo }: { comparativo: 
     const v = dict[key];
     if (!v) return null;
     return (
-      <div className="border rounded-lg p-3">
+      <div key={key} className="border rounded-lg p-3">
         <div className="text-xs text-gray-500">{v.label}</div>
         <div className="text-base font-semibold">{v.value}</div>
       </div>
@@ -190,7 +191,7 @@ export default function ComparativoPublicClient({ comparativo }: { comparativo: 
     const v = dict[key];
     if (!v) return null;
     return (
-      <div className="flex justify-between gap-4 border-b py-2 text-sm">
+      <div key={key} className="flex justify-between gap-4 border-b py-2 text-sm">
         <div className="text-gray-500">{v.label}</div>
         <div className="font-medium text-right">{v.value}</div>
       </div>
@@ -266,7 +267,7 @@ if (pins.length === 0) return;
   }, [mapReady, items]);
 
   // ========= FOOTER DISCLAIMER =========
-  const disclaimer = `Este comparativo possui caráter de pré-atendimento e foi elaborado com base nas informações fornecidas no momento do atendimento. Valores, disponibilidade, condições e planos oficiais devem ser confirmados e efetivados diretamente junto aos proprietários legais, construtoras e vendedores na fase de fechamento.`;
+  const disclaimer = comparativo.modoDirecionamento ? "Comparativo para reunião de direcionamento, com propostas revisadas. Valores, disponibilidade, aprovação, correções e condições devem ser confirmados com a construtora e o banco. Consulte os anexos originais." : `Este comparativo possui caráter de pré-atendimento e foi elaborado com base nas informações fornecidas no momento do atendimento. Valores, disponibilidade, condições e planos oficiais devem ser confirmados e efetivados diretamente junto aos proprietários legais, construtoras e vendedores na fase de fechamento.`;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -284,7 +285,7 @@ if (pins.length === 0) return;
 
           {/* Logo (ajuste o caminho) */}
           <div className="text-sm font-semibold text-gray-700">FlyImob</div>
-        </div>//
+        </div>
 
         <p className="mt-4 text-gray-600 text-sm max-w-3xl">
           Comparação personalizada para facilitar sua decisão, com informações organizadas lado a lado.
@@ -293,7 +294,9 @@ if (pins.length === 0) return;
 
       {/* CARDS */}
       <div className="max-w-7xl mx-auto px-4 pb-10">
-        <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
+        {comparativo.modoDirecionamento && blocks.credito !== false && <CreditoApresentacao credito={comparativo.resumoCredito} anexos={comparativo.anexos ?? []} slug={comparativo.slugPublico} />}
+        {comparativo.modoDirecionamento && <h2 className="text-xl font-semibold mb-4">2. Opções para comparar</h2>}
+        <div className={comparativo.modoDirecionamento ? "grid grid-flow-col auto-cols-[minmax(260px,1fr)] gap-4 overflow-x-auto pb-4 items-start" : "grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3"}>
 
           {items.map((x: any) => {
             const dict = labelValuePairs(x);
@@ -325,13 +328,16 @@ if (pins.length === 0) return;
                   <div>
                     <div className="text-sm text-gray-500">Opção {x.idx + 1}</div>
                     <div className="text-lg font-semibold leading-tight">
-                      {x.emp?.name ?? "Empreendimento"}
+                      {(!comparativo.modoDirecionamento || shouldShow("nomeEmpreendimento")) && (x.emp?.name ?? "Empreendimento")}
                     </div>
+                    {comparativo.modoDirecionamento && x.it.planoPagamento?.titulo && <p className="text-sm font-medium mt-1">{x.it.planoPagamento.titulo}</p>}
                     <div className="text-sm text-gray-600">
-                      {x.emp?.bairro ?? "-"} • {x.emp?.cidade ?? "-"}
+                      {(!comparativo.modoDirecionamento || shouldShow("bairro")) && (x.emp?.bairro ?? "-")} {(!comparativo.modoDirecionamento || shouldShow("cidade")) && (x.emp?.cidade ?? "-")}
                     </div>
                   </div>
 
+                  {comparativo.modoDirecionamento && x.it.planoPagamento && <PlanoApresentacao plano={x.it.planoPagamento} fields={fields} blocks={blocks} anexos={x.it.anexos ?? []} slug={comparativo.slugPublico} />}
+                  {!comparativo.modoDirecionamento && <>
                   {/* PRIMÁRIOS */}
                   <div className="grid grid-cols-2 gap-2">
                     {layout.primary.map((k: string) => renderMetric(k, dict))}
@@ -345,6 +351,8 @@ if (pins.length === 0) return;
                    
                   </div>
 
+                  </>}
+                  {comparativo.modoDirecionamento && blocks.geral && <div className="grid grid-cols-2 gap-2">{layout.secondary.filter((k: string) => ["dataEntregaMeses"].includes(k)).map((k: string) => renderMetric(k, dict))}</div>}
                   {/* TERCIÁRIOS (lista limpa) */}
                   <div className="pt-2">
                     {blocks.geral && (
@@ -357,15 +365,16 @@ if (pins.length === 0) return;
                           {renderLine("tipologiaNome", dict)}
                           {renderLine("quartos", dict)}
                           {renderLine("suites", dict)}
-                          {renderLine("vagas", dict)}
+                          {!comparativo.modoDirecionamento && renderLine("vagas", dict)}
                           {renderLine("areaPrivativa", dict)}
                           {renderLine("areaTerreno", dict)}
                           {renderLine("construtora", dict)}
+                          {comparativo.modoDirecionamento && ["bairro", "cidade", "enderecoCompleto", "hectares", "alqueires", "disponiveis"].map(k => renderLine(k, dict))}
                         </>
                       )}
 
                       {/* Entrada */}
-                      {blocks.entrada && (
+                      {blocks.entrada && !comparativo.modoDirecionamento && (
                         <>
                           {renderLine("parcelasEntradaQtd", dict)}
                           {renderLine("parcelasIntermediarias", dict)}
@@ -376,7 +385,7 @@ if (pins.length === 0) return;
                       )}
 
                       {/* Financiamento */}
-                      {blocks.financiamento && (
+                      {blocks.financiamento && !comparativo.modoDirecionamento && (
                         <>
                           {renderLine("saldoFinanciamento", dict)}
                           {renderLine("taxaJuros", dict)}
@@ -386,7 +395,7 @@ if (pins.length === 0) return;
                       )}
 
                       {/* Observações */}
-                      {blocks.observacoes && shouldShow("observacao") && (
+                      {!comparativo.modoDirecionamento && blocks.observacoes && shouldShow("observacao") && (
                         <div className="mt-3 border rounded-lg p-3 bg-gray-50 text-sm">
                           <div className="text-xs text-gray-500 mb-1">Observação</div>
                           <div className="text-gray-700 whitespace-pre-wrap">
@@ -402,6 +411,7 @@ if (pins.length === 0) return;
           })}
         </div>
 
+        {comparativo.modoDirecionamento && blocks.proximosPassos !== false && comparativo.resumoCredito?.proximosPassos && <section className="mt-6 bg-white border rounded-2xl p-5"><h2 className="text-xl font-semibold">3. Direcionamento e próximos passos</h2><p className="mt-3 whitespace-pre-wrap text-sm">{comparativo.resumoCredito.proximosPassos}</p></section>}
         {/* MAPA */}
         {blocks.mapa && (
           <div className="mt-10 bg-white border rounded-2xl p-4 shadow-sm">

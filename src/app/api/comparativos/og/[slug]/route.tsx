@@ -46,7 +46,7 @@ export async function GET(
     },
   });
 
-  if (!comparativo) {
+  if (!comparativo || (comparativo.modoDirecionamento && !comparativo.publicadoEm)) {
     return new Response("Comparativo não encontrado", { status: 404 });
   }
 

@@ -3,6 +3,7 @@
 import { useParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import DirecionamentoEditor from "../DirecionamentoEditor";
 
 /* =======================
    TIPOS
@@ -56,6 +57,7 @@ type ComparativoItem = {
 };
 
 type Comparativo = {
+  modoDirecionamento?: boolean;
   id: string;
   titulo: string;
   clienteNome: string;
@@ -141,7 +143,6 @@ export default function ComparativoEditorPage() {
   const params = useParams();
   const id = params?.id as string | undefined;
 
-  if (!id) return <div className="p-6 text-sm text-gray-500">Carregando rota…</div>;
 
   const [cmp, setCmp] = useState<Comparativo | null>(null);
   const [loading, setLoading] = useState(true);
@@ -343,8 +344,10 @@ export default function ComparativoEditorPage() {
     });
   }, [cmp]);
 
+  if (!id) return <div className="p-6 text-sm text-gray-500">Carregando rota…</div>;
   if (loading) return <div className="p-6">Carregando…</div>;
   if (!cmp) return <div className="p-6">Comparativo não encontrado.</div>;
+  if (cmp.modoDirecionamento) return <DirecionamentoEditor id={cmp.id} />;
 
   return (
     <div className="p-6 space-y-6">

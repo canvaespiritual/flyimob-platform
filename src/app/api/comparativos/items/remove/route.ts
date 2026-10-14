@@ -11,11 +11,14 @@ export async function POST(req: Request) {
     if (!itemId) return NextResponse.json({ ok: false, error: "itemId é obrigatório." }, { status: 400 });
 
     const item = await prisma.comparativoItem.findFirst({
-      where: { id: itemId, comparativo: { tenantId: auth.session.tenant.id } }, select: { id: true },
+      where: { id: itemId, comparativo: { tenantId: auth.session.tenant.id } }, select: { id: true, comparativoId: true },
     });
     if (!item) return NextResponse.json({ ok: false, error: "Item não encontrado." }, { status: 404 });
 
-    await prisma.comparativoItem.delete({ where: { id: itemId } });
+    await prisma.$transaction(async tx => {
+      await tx.comparativo.update({ where: { id: item.comparativoId }, data: { publicadoEm: null, revisao: { increment: 1 } } });
+      await tx.comparativoItem.delete({ where: { id: itemId } });
+    });
     return NextResponse.json({ ok: true });
   } catch (err) {
     console.error("POST /api/comparativos/items/remove error:", err);

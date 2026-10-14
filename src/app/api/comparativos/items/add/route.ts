@@ -25,16 +25,20 @@ export async function POST(req: Request) {
       include: { items: true },
     });
     if (!comparativo) return NextResponse.json({ ok: false, error: "Comparativo não encontrado." }, { status: 404 });
+    const tipologia = await prisma.empreendimentoTipologia.findFirst({ where: { id: tipologiaId, empreendimento: { tenantId: tenant.id } }, select: { id: true } });
+    if (!tipologia) return NextResponse.json({ ok: false, error: "Tipologia não encontrada." }, { status: 404 });
 
-    const maxOrdem = comparativo.items.reduce((m, it) => Math.max(m, it.ordem), 0);
-
-    const item = await prisma.comparativoItem.create({
+    const item = await prisma.$transaction(async tx => {
+      await tx.comparativo.update({ where: { id: comparativoId }, data: { publicadoEm: null, revisao: { increment: 1 } } });
+      const last = await tx.comparativoItem.findFirst({ where: { comparativoId }, orderBy: { ordem: "desc" }, select: { ordem: true } });
+      return tx.comparativoItem.create({
       data: {
         comparativoId,
         tipologiaId,
-        ordem: maxOrdem + 1,
+        ordem: (last?.ordem ?? 0) + 1,
       },
       select: { id: true },
+      });
     });
 
     return NextResponse.json({ ok: true, item });

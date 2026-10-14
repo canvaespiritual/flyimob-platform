@@ -1,3 +1,6 @@
+import { isPublished, publicComparativo } from "@/lib/comparativos/access.server";
+import { getSessionUser } from "@/lib/session.server";
+import { hasPermission } from "@/lib/rbac";
 import type { Metadata } from "next";
 import { prisma } from "../../../lib/prisma";
 import ComparativoPublicClient from "./ui/ComparativoPublicClient";
@@ -10,13 +13,15 @@ function absoluteUrl(url?: string | null) {
   return `${SITE_URL}${url.startsWith("/") ? url : `/${url}`}`;
 }
 
-async function getComparativo(slug: string) {
-  return prisma.comparativo.findUnique({
+async function getComparativo(slug: string, preview = false) {
+  const c = await prisma.comparativo.findUnique({
     where: { slugPublico: slug },
     include: {
+      anexos: { where: { itemId: null }, select: { id: true, titulo: true, nomeOriginal: true, itemId: true } },
       items: {
         orderBy: { ordem: "asc" },
         include: {
+          anexos: { select: { id: true, titulo: true, nomeOriginal: true } },
           tipologia: {
             include: {
               empreendimento: {
@@ -31,6 +36,13 @@ async function getComparativo(slug: string) {
       },
     },
   });
+  if (!c) return null;
+  if (isPublished(c)) return publicComparativo(c);
+  if (preview && c.items.length && c.items.every(i => i.estadoExtracao === "APROVADO")) {
+    const session = await getSessionUser();
+    if (session?.tenant.id === c.tenantId && hasPermission(session.user.role, "comparativos:use")) return publicComparativo(c);
+  }
+  return null;
 }
 
 function pickOgImage(comparativo: any) {
@@ -101,7 +113,7 @@ const image = `${SITE_URL}/og/comparativo-v3.jpg`;
 }
 
 export default async function PublicComparativoPage(
-  { params }: { params: { slug: string } | Promise<{ slug: string }> }
+  { params, searchParams }: { params: { slug: string } | Promise<{ slug: string }>; searchParams?: Promise<{ preview?: string }> }
 ) {
   const { slug } = await Promise.resolve(params);
 
@@ -109,7 +121,8 @@ export default async function PublicComparativoPage(
     return <div className="p-6">Comparativo inválido.</div>;
   }
 
-  const comparativo = await getComparativo(slug);
+  const query = await searchParams;
+  const comparativo = await getComparativo(slug, query?.preview === "1");
   
   if (!comparativo) {
     return <div className="p-6">Comparativo não encontrado.</div>;

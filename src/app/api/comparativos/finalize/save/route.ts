@@ -75,7 +75,6 @@ export async function POST(req: Request) {
       include: {
         items: {
           orderBy: { ordem: "asc" },
-          take: 3,
           include: {
             tipologia: {
               include: {
@@ -95,12 +94,20 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, error: "Comparativo não encontrado" }, { status: 404 });
     }
 
+    if (comparativo.modoDirecionamento && (!comparativo.items.length || comparativo.items.some(item => item.estadoExtracao !== "APROVADO" || !item.planoPagamento))) {
+      return NextResponse.json({ ok: false, error: "Revise e aprove todas as opções antes de finalizar." }, { status: 409 });
+    }
+    if (comparativo.modoDirecionamento && body.revisao !== comparativo.revisao) {
+      return NextResponse.json({ ok: false, error: "O comparativo mudou. Atualize a página antes de finalizar." }, { status: 409 });
+    }
+
     const incomingConfig =
       typeof configExibicao === "object" && configExibicao ? configExibicao : {};
 
     let ogImageUrl: string | null = null;
 
     const canGenerateOg =
+      !comparativo.modoDirecionamento &&
       Array.isArray(comparativo.items) &&
       comparativo.items.length > 0 &&
       hasAtLeastOnePhoto(comparativo);
@@ -137,12 +144,15 @@ export async function POST(req: Request) {
         : {}),
     };
 
-    await prisma.comparativo.update({
-      where: { id: comparativo.id },
+    const saved = await prisma.comparativo.updateMany({
+      where: { id: comparativo.id, tenantId: tenant.id, revisao: comparativo.revisao },
       data: {
         configExibicao: nextConfigExibicao,
+        ...(comparativo.modoDirecionamento ? { publicadoEm: new Date() } : {}),
+        revisao: { increment: 1 },
       },
     });
+    if (!saved.count) return NextResponse.json({ ok: false, error: "O comparativo mudou durante a finalização. Atualize e tente novamente." }, { status: 409 });
 
     return NextResponse.json({
       ok: true,
