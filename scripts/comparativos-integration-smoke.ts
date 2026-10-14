@@ -65,7 +65,7 @@ async function main() {
     const outsiderType = await db.empreendimentoTipologia.create({ data: { empreendimentoId: outsiderProject.id, nome: "Externa" } });
     stage = "start local server";
     let logs = "";
-    server = spawn(process.execPath, ["node_modules/next/dist/bin/next", "dev", "--port", "3115"], { windowsHide: true, env: { ...process.env, DATABASE_URL: url.toString(), OPENAI_API_KEY: "", NODE_ENV: "development" }, stdio: ["ignore", "pipe", "pipe"] });
+    server = spawn(process.execPath, ["node_modules/next/dist/bin/next", "dev", "--port", "3115"], { windowsHide: true, env: { ...process.env, DATABASE_URL: url.toString(), APP_URL: origin, NEXT_PUBLIC_SITE_URL: origin, OPENAI_API_KEY: "", NODE_ENV: "development" }, stdio: ["ignore", "pipe", "pipe"] });
     server.stdout?.on("data", data => { logs = (logs + data.toString()).slice(-10000); });
     server.stderr?.on("data", data => { logs = (logs + data.toString()).slice(-10000); });
     for (let i = 0; i < 120; i++) {

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { PLANO_VAZIO, validarPlano, alertasPlano, camposLegados, resumoGrupo, validarCredito, type GrupoPagamento } from "../../src/lib/comparativos/plano";
 import { conferirArquivo, extrairPlano, PLANO_SCHEMA } from "../../src/lib/comparativos/extracao.server";
-import { isPublished, publicComparativo } from "../../src/lib/comparativos/access.server";
+import { isPublished, publicComparativo, sameOrigin } from "../../src/lib/comparativos/access.server";
 import { PDFDocument } from "pdf-lib";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -10,6 +10,21 @@ import { PlanoApresentacao } from "../../src/app/c/PlanoApresentacao";
 import { mensaisDaTabela, conferirMensais, fundamentarNoTexto } from "../../src/lib/comparativos/tabela";
 
 const monthly: GrupoPagamento = { tipo: "mensais_obra", titulo: "Mensais", quantidade: 48, primeiraParcela: 1172.14, ultimaParcela: 562.11, totalInformado: 43160, inicio: "2027-03-08", fim: "2031-02-08", variacao: "decrescente", resumo: "", pagina: 1 };
+test("production browser uploads use the public HTTPS origin behind Railway", () => {
+  const previous = process.env.APP_URL; const site = process.env.NEXT_PUBLIC_SITE_URL;
+  try {
+    process.env.APP_URL = "https://flyimob.com";
+    for (const origin of ["https://flyimob.com", "https://www.flyimob.com"]) assert.doesNotThrow(() => sameOrigin(new Request("http://0.0.0.0:8080/api/comparativos/anexos", { headers: { origin, "sec-fetch-site": "same-origin" } })));
+    assert.throws(() => sameOrigin(new Request("http://0.0.0.0:8080/api/comparativos/anexos", { headers: { origin: "https://attacker.example", "x-forwarded-host": "attacker.example", "x-forwarded-proto": "https" } })), /Origem/);
+    assert.throws(() => sameOrigin(new Request("http://0.0.0.0:8080/api/comparativos/anexos", { headers: { origin: "https://flyimob.com", "sec-fetch-site": "cross-site" } })), /Origem/);
+    assert.throws(() => sameOrigin(new Request("http://0.0.0.0:8080/api/comparativos/anexos", { headers: { origin: "null" } })), /Origem/);
+    delete process.env.APP_URL; delete process.env.NEXT_PUBLIC_SITE_URL;
+    assert.doesNotThrow(() => sameOrigin(new Request("http://localhost:3115/api/comparativos/anexos", { headers: { origin: "http://localhost:3115" } })));
+  } finally {
+    if (previous === undefined) delete process.env.APP_URL; else process.env.APP_URL = previous;
+    if (site === undefined) delete process.env.NEXT_PUBLIC_SITE_URL; else process.env.NEXT_PUBLIC_SITE_URL = site;
+  }
+});
 test("computed totals and projected dates absent from the PDF are rejected", () => {
   const p = { ...PLANO_VAZIO, grupos: [{ ...monthly, primeiraParcela: 2490, ultimaParcela: 2490, totalInformado: 4980, inicio: "2027-08-01", fim: "2028-01-31" }] };
   const text = "Pré-chaves intermediária 01 R$ 2.490,00 01/08/2027. Intermediária 02 R$ 2.490,00. " + "Texto original do documento. ".repeat(5);

@@ -3,8 +3,20 @@ import { ComparativoError } from "./plano";
 import { DocumentationError } from "../documentacoes/validation";
 
 export function sameOrigin(req: Request) {
+  const reject = () => { throw new ComparativoError(403, "Origem do pedido inválida."); };
+  if (req.headers.get("sec-fetch-site") === "cross-site") reject();
   const origin = req.headers.get("origin");
-  if (origin && origin !== new URL(req.url).origin) throw new ComparativoError(403, "Origem do pedido inválida.");
+  if (!origin) return;
+  // Railway terminates HTTPS before Next. Its internal request URL is not
+  // the browser's origin. Only trust our configured public URL, not forwarded headers.
+  const configured = process.env.APP_URL?.trim() || process.env.NEXT_PUBLIC_SITE_URL?.trim();
+  let publicOrigin: string;
+  try { publicOrigin = new URL(configured || req.url).origin; } catch { return reject(); }
+  const allowed = new Set([publicOrigin]);
+  if (["https://flyimob.com", "https://www.flyimob.com"].includes(publicOrigin)) {
+    allowed.add("https://flyimob.com"); allowed.add("https://www.flyimob.com");
+  }
+  if (!allowed.has(origin)) reject();
 }
 export function failure(e: unknown) {
   if (e instanceof ComparativoError || e instanceof DocumentationError) return NextResponse.json({ ok: false, error: e.message }, { status: e.status });
